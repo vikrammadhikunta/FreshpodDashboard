@@ -3,8 +3,8 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import Sidebar from './components/sidebar';
-import Header from './components/header';
+import Sidebar from './components/Sidebar';
+import Header from './components/Header';
 import Loading from './Pages/loading';
 import LoginPage from './Pages/LoginPage';
 import Unauthorized from './Pages/Unauthorized';
