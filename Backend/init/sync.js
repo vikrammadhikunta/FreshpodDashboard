@@ -7,6 +7,16 @@ function startSync() {
 
   const machinesRef = db.ref("machines");
 
+  // ✅ Print all existing machines
+  machinesRef.once("value", (snapshot) => {
+    console.log("📋 Machines in Firebase:");
+
+    snapshot.forEach((machineSnap) => {
+      console.log(machineSnap.key, machineSnap.val());
+    });
+  });
+
+  // Existing listener (unchanged)
   machinesRef.on("child_added", (machineSnap) => {
     const machineId = machineSnap.key;
     console.log(`🆕 Machine detected: ${machineId}`);

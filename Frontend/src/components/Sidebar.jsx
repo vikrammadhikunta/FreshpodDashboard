@@ -1,4 +1,5 @@
-// components/Sidebar.jsx - CORRECTED WITH OPERATOR MENU
+// components/Sidebar.jsx - Updated with Reports for Admin
+
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from '../context/AuthContext';
@@ -12,12 +13,8 @@ import {
   LogOut,
   Menu,
   X,
-  ShoppingCart,
-  TrendingUp,
-  DollarSign,
-  UserPlus,
   Clock,
-  Cpu
+  FileText,
 } from 'lucide-react';
 import logoSquare from '../assets/logo-square.png';
 
@@ -38,6 +35,7 @@ const Sidebar = () => {
     { path: "/admin", name: "Overview", icon: LayoutGrid },
     { path: "/admin/machine", name: "Machines", icon: ShieldCheck },
     { path: "/admin/user", name: "User Directory", icon: Users },
+    { path: "/admin/reports", name: "Reports", icon: FileText }, // ✅ ADDED
     { path: "/admin/analytics", name: "Analytics", icon: BarChart3 },
     { path: "/admin/health", name: "System Health", icon: Activity },
     { path: "/admin/settings", name: "Settings", icon: Settings },
@@ -56,28 +54,39 @@ const Sidebar = () => {
   const customerMenuItems = [
     { path: "/customer", name: "Overview", icon: LayoutGrid },
     { path: "/customer/machines", name: "My Machines", icon: ShieldCheck },
+    { path: "/customer/reports", name: "Reports", icon: FileText },
     { path: "/customer/analytics", name: "Analytics", icon: BarChart3 },
     { path: "/customer/settings", name: "Settings", icon: Settings },
   ];
 
-  // Operator Menu Items - FIXED: Using lucide-react icons
+  // Operator Menu Items
   const operatorMenuItems = [
     { path: "/operator", name: "Dashboard", icon: LayoutGrid },
     { path: "/operator/machines", name: "My Machines", icon: ShieldCheck },
     { path: "/operator/history", name: "History", icon: Clock },
   ];
 
+  // Get menu items based on role
   const getMenuItems = () => {
     switch(userRole) {
-      case 'admin': return adminMenuItems;
-      case 'dealership': return dealershipMenuItems;
-      case 'customer': return customerMenuItems;
-      case 'operator': return operatorMenuItems;
-      default: return [];
+      case 'admin': 
+        return adminMenuItems;
+      case 'dealership': 
+        return dealershipMenuItems;
+      case 'customer': 
+        return customerMenuItems;
+      case 'operator': 
+        return operatorMenuItems;
+      default: 
+        return [];
     }
   };
 
   const menuItems = getMenuItems();
+
+  // DEBUG: Log what menu items are being rendered
+  console.log("🔍 Sidebar - Current role:", userRole);
+  console.log("📋 Sidebar - Menu items:", menuItems.map(item => item.name));
 
   // Role-specific brand text
   const getBrandSubtext = () => {

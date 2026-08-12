@@ -1,4 +1,5 @@
-// App.jsx - Add operator routes
+// App.jsx - COMPLETE WITH CUSTOMER AND ADMIN REPORT ROUTES
+
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
@@ -15,11 +16,15 @@ import UserDirective from './Pages/Admin/UserDirective';
 import Analytics from './Pages/Admin/Analytics';
 import SystemHealth from './Pages/Admin/SystemHealth';
 import Settings from './Pages/Admin/Settings';
+import AdminReports from './Pages/Admin/AdminReports';
 
 // Customer Pages
 import CustomerDashboard from './Pages/Customer/Dashboard';
 import CustomerMachines from './Pages/Customer/Machines';
 import CustomerAnalytics from './Pages/Customer/Analytics';
+import CustomerReports from './Pages/Customer/Reports';
+import CustomerCreateReport from './Pages/Customer/CreateReport';
+import CustomerReportDetail from './Pages/Customer/ReportDetail';
 
 // Dealership Pages
 import DealershipDashboard from './Pages/Dealership/Dashboard';
@@ -27,7 +32,7 @@ import DealershipMachines from './Pages/Dealership/Machines';
 import DealershipUsers from './Pages/Dealership/Users';
 import DealershipAnalytics from './Pages/Dealership/Analytics';
 
-// Operator Pages - ADD THESE IMPORTS
+// Operator Pages
 import OperatorDashboard from './Pages/Operator/Dashboard';
 import OperatorMachines from './Pages/Operator/Machines';
 import OperatorHistory from './Pages/Operator/History';
@@ -50,7 +55,6 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
 const Layout = ({ children }) => {
   const { userRole } = useAuth();
-  // Show sidebar for all roles including operator
   const showSidebar = userRole === 'admin' || userRole === 'dealership' || userRole === 'customer' || userRole === 'operator';
   
   return (
@@ -80,6 +84,7 @@ function App() {
       <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><Layout><Dashboard /></Layout></ProtectedRoute>} />
       <Route path="/admin/machine" element={<ProtectedRoute allowedRoles={['admin']}><Layout><Machine /></Layout></ProtectedRoute>} />
       <Route path="/admin/user" element={<ProtectedRoute allowedRoles={['admin']}><Layout><UserDirective /></Layout></ProtectedRoute>} />
+      <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']}><Layout><AdminReports /></Layout></ProtectedRoute>} />
       <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin']}><Layout><Analytics /></Layout></ProtectedRoute>} />
       <Route path="/admin/health" element={<ProtectedRoute allowedRoles={['admin']}><Layout><SystemHealth /></Layout></ProtectedRoute>} />
       <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><Layout><Settings /></Layout></ProtectedRoute>} />
@@ -94,10 +99,13 @@ function App() {
       {/* Customer Routes */}
       <Route path="/customer" element={<ProtectedRoute allowedRoles={['customer']}><Layout><CustomerDashboard /></Layout></ProtectedRoute>} />
       <Route path="/customer/machines" element={<ProtectedRoute allowedRoles={['customer']}><Layout><CustomerMachines /></Layout></ProtectedRoute>} />
+      <Route path="/customer/reports" element={<ProtectedRoute allowedRoles={['customer']}><Layout><CustomerReports /></Layout></ProtectedRoute>} />
+      <Route path="/customer/reports/create" element={<ProtectedRoute allowedRoles={['customer']}><Layout><CustomerCreateReport /></Layout></ProtectedRoute>} />
+      <Route path="/customer/reports/:reportId" element={<ProtectedRoute allowedRoles={['customer']}><Layout><CustomerReportDetail /></Layout></ProtectedRoute>} />
       <Route path="/customer/analytics" element={<ProtectedRoute allowedRoles={['customer']}><Layout><CustomerAnalytics /></Layout></ProtectedRoute>} />
       <Route path="/customer/settings" element={<ProtectedRoute allowedRoles={['customer']}><Layout><Settings /></Layout></ProtectedRoute>} />
       
-      {/* Operator Routes - ADD THESE */}
+      {/* Operator Routes */}
       <Route path="/operator" element={<ProtectedRoute allowedRoles={['operator']}><Layout><OperatorDashboard /></Layout></ProtectedRoute>} />
       <Route path="/operator/machines" element={<ProtectedRoute allowedRoles={['operator']}><Layout><OperatorMachines /></Layout></ProtectedRoute>} />
       <Route path="/operator/history" element={<ProtectedRoute allowedRoles={['operator']}><Layout><OperatorHistory /></Layout></ProtectedRoute>} />

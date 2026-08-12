@@ -7,6 +7,12 @@ const machineSchema = new mongoose.Schema({
     unique: true
   },
 
+  qrId: {
+    type: String,
+    unique: true,
+    sparse: true 
+  },
+
   location: {
     type: String,
     required: true

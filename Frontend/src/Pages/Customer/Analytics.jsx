@@ -1,4 +1,4 @@
-// src/Pages/Customer/Analytics.jsx - FIXED VERSION
+// src/Pages/Customer/Analytics.jsx - WITH SANITIZATION INDICATOR
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -13,6 +13,8 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   CartesianGrid, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell 
 } from "recharts";
+// Import the sanitization indicator component
+import { SanitizationIndicator } from '../Sanitization';
 
 const CustomerAnalytics = () => {
   const { user, accessToken } = useAuth();
@@ -471,7 +473,6 @@ const CustomerAnalytics = () => {
         </div>
       </div>
 
-      {/* Rest of your component remains the same... */}
       {/* Profitability Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 text-white">
@@ -544,7 +545,7 @@ const CustomerAnalytics = () => {
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Machine Performance Table */}
+        {/* Machine Performance Table WITH SANITIZATION INDICATOR */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-gray-100">
             <h3 className="font-bold text-gray-800">Machine Performance</h3>
@@ -560,6 +561,7 @@ const CustomerAnalytics = () => {
                   <th className="px-4 py-3 text-xs font-bold text-gray-500">Total Taps</th>
                   <th className="px-4 py-3 text-xs font-bold text-gray-500">Revenue (₹)</th>
                   <th className="px-4 py-3 text-xs font-bold text-gray-500">Net Profit (₹)</th>
+                  <th className="px-4 py-3 text-xs font-bold text-gray-500">Sanitization</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -572,6 +574,14 @@ const CustomerAnalytics = () => {
                     <td className="px-4 py-3 text-sm text-green-600 font-medium">₹{Math.round(machine.revenue).toLocaleString()}</td>
                     <td className={`px-4 py-3 text-sm font-bold ${machine.netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
                       ₹{Math.round(machine.netProfit).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3">
+                      <SanitizationIndicator 
+                        totalTaps={machine.totalTaps}
+                        machineId={machine.id}
+                        containerSize={5}
+                        usagePerTap={0.012}
+                      />
                     </td>
                   </tr>
                 ))}

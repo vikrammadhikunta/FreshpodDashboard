@@ -262,6 +262,7 @@ router.post("/machine/start", auth, allowRoles("operator"), async (req, res) => 
     res.status(500).json({ error: err.message });
   }
 });
+
 // ======================================================
 // GET MACHINE STATUS (Real-time from MQTT cache)
 // ======================================================
@@ -454,7 +455,7 @@ setInterval(() => {
     const sessionAge = (now - new Date(session.startTime).getTime()) / 1000 / 60; // minutes
     
     // Remove sessions older than 10 minutes (cleaning takes ~4-5 min)
-    if (sessionAge > 10) {
+    if (sessionAge > 5) {
       activeSessions.delete(id);
       removedCount++;
       debugLog('INFO', `Cleaned up stale session for machine ${id} (${sessionAge.toFixed(1)} min old)`);

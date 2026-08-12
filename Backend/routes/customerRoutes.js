@@ -6,6 +6,7 @@ const router = express.Router();
 const Machine = require("../Model/machineSchema");
 const User = require("../Model/userSchema");
 const Log = require("../Model/logSchema");
+const Report = require("../Model/reportSchema");
 const CustomerMachineSettings = require("../Model/customerMachineSettingsSchema");
 const { auth, allowRoles } = require("../middleware/auth");
 
@@ -167,49 +168,94 @@ router.put("/machine/:id/cost", auth, allowRoles("customer"), async (req, res) =
   console.log("\n🟢 [PUT /customer/machine/:id/cost] Request received");
   console.log("📌 Machine ID:", req.params.id);
   console.log("📌 Cost Per Tap:", req.body.costPerTap);
+  console.log("📌 Customer ID:", req.user.id);
   
   try {
     const { costPerTap } = req.body;
     const customerId = req.user.id;
     const machineId = req.params.id;
     
-    if (costPerTap === undefined || costPerTap < 0) {
-      console.log("❌ Invalid costPerTap value:", costPerTap);
-      return res.status(400).json({ success: false, message: "Valid costPerTap is required" });
+    // Validate input
+    if (costPerTap === undefined || costPerTap === null) {
+      console.log("❌ costPerTap is required");
+      return res.status(400).json({ 
+        success: false, 
+        message: "costPerTap is required" 
+      });
     }
     
-    const machine = await Machine.findOne({
-      _id: machineId,
-      assignedTo: customerId
-    });
-    
-    if (!machine) {
-      console.log("❌ Machine not found or not owned by customer");
-      return res.status(404).json({ success: false, message: "Machine not found" });
+    if (costPerTap < 0) {
+      console.log("❌ costPerTap cannot be negative:", costPerTap);
+      return res.status(400).json({ 
+        success: false, 
+        message: "costPerTap cannot be negative" 
+      });
     }
     
-    console.log(`✅ Machine found: ${machine.machineId}`);
-    
-    await CustomerMachineSettings.findOneAndUpdate(
-      { customerId, machineId },
+    // Find and update the machine
+    const updatedMachine = await Machine.findOneAndUpdate(
       { 
-        costPerTap,
-        machineCode: machine.machineId,
-        updatedAt: Date.now()
+        _id: machineId,
+        assignedTo: customerId,
+        status: { $ne: "inactive" }
       },
-      { upsert: true, new: true }
+      { 
+        $set: { 
+          costPerTap: costPerTap
+        } 
+      },
+      { 
+        returnDocument: 'after',  // ✅ Fixed: Use 'after' instead of 'new'
+        runValidators: true,
+        lean: true
+      }
     );
     
+    if (!updatedMachine) {
+      console.log("❌ Machine not found or not owned by customer");
+      return res.status(404).json({ 
+        success: false, 
+        message: "Machine not found or not assigned to you" 
+      });
+    }
+    
     console.log(`✅ Cost per tap updated to ${costPerTap}`);
+    console.log(`📊 Updated machine:`, updatedMachine);
+    
+    // ✅ Update CustomerMachineSettings if it exists
+    try {
+      const CustomerMachineSettings = mongoose.model('CustomerMachineSettings');
+      await CustomerMachineSettings.findOneAndUpdate(
+        { customerId, machineId: updatedMachine._id },
+        { 
+          costPerTap,
+          machineCode: updatedMachine.machineId,
+          updatedAt: new Date()
+        },
+        { upsert: true, new: true, returnDocument: 'after' }
+      );
+      console.log("✅ Customer settings updated");
+    } catch (settingsError) {
+      console.warn("⚠️ Could not update customer settings:", settingsError.message);
+    }
+    
     res.json({
       success: true,
       message: "Cost per tap updated successfully",
-      data: { machineId: machine.machineId, costPerTap }
+      data: { 
+        machineId: updatedMachine.machineId,
+        costPerTap: updatedMachine.costPerTap,
+        status: updatedMachine.status
+      }
     });
     
   } catch (err) {
     console.error("❌ Error updating cost:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ 
+      success: false,
+      error: "INTERNAL_SERVER_ERROR",
+      message: err.message 
+    });
   }
 });
 
@@ -248,6 +294,10 @@ router.put("/machine/:id/rent", auth, allowRoles("customer"), async (req, res) =
       },
       { upsert: true, new: true }
     );
+
+    
+
+
     
     res.json({
       success: true,
@@ -831,79 +881,6 @@ router.delete("/operator/:operatorId", auth, allowRoles("customer"), async (req,
 });
 
 // ======================================================
-// START MACHINE (MQTT)
-// ======================================================
-router.post("/machine/start", auth, allowRoles("customer"), async (req, res) => {
-  console.log("\n🟢 [POST /customer/machine/start] Request received");
-  console.log("📌 Machine ID:", req.body.machineId);
-  console.log("📌 Amount:", req.body.amount);
-  console.log("📌 User ID:", req.user.id);
-  
-  try {
-    const { machineId, amount } = req.body;
-    const mqttClient = req.app.get('mqttClient');
-    
-    if (!mqttClient || !mqttClient.connected) {
-      console.log("❌ MQTT client not available or not connected");
-      return res.status(503).json({ 
-        success: false, 
-        message: 'MQTT service not available' 
-      });
-    }
-    console.log("✅ MQTT client connected");
-
-    const machine = await Machine.findOne({
-      machineId,
-      assignedTo: req.user.id
-    });
-
-    if (!machine) {
-      console.log("❌ Machine not found or not owned by customer");
-      return res.status(404).json({
-        success: false,
-        message: "Machine not found or not owned"
-      });
-    }
-    console.log(`✅ Machine found: ${machine.machineId}`);
-
-    const topic = `freshpod_vending_2025/${machineId}`;
-    const message = JSON.stringify({
-      action: "START",
-      amount: amount || machine.costPerTap || 10,
-      userId: req.user.id,
-      timestamp: Date.now()
-    });
-
-    console.log(`📡 Publishing to topic: ${topic}`);
-    console.log(`📡 Message: ${message}`);
-
-    mqttClient.publish(topic, message, (err) => {
-      if (err) {
-        console.error("❌ MQTT publish error:", err);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to send command to machine'
-        });
-      }
-      
-      console.log("✅ Command sent successfully");
-      res.json({
-        success: true,
-        message: "Machine start command sent",
-        machineId,
-        amount: amount || machine.costPerTap || 10
-      });
-    });
-
-  } catch (err) {
-    console.error("❌ Start machine error:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ======================================================
-// GET DAILY LOGS FOR GRAPH
-// ======================================================
 router.get("/daily-logs", auth, allowRoles("customer"), async (req, res) => {
   console.log("\n🟢 [GET /customer/daily-logs] Request received");
   
@@ -960,6 +937,258 @@ router.get("/all-logs", auth, allowRoles("customer"), async (req, res) => {
   } catch (err) {
     console.error("Error fetching logs:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+
+router.post("/report/create", auth, allowRoles("customer"), async (req, res) => {
+  console.log("\n" + "=".repeat(60));
+  console.log("🔵 [POST /customer/report/create] Request received");
+  console.log("=".repeat(60));
+  console.log("📌 Customer ID:", req.user.id);
+  console.log("📌 Request body:", JSON.stringify(req.body, null, 2));
+  
+  try {
+    const customerId = req.user.id;
+    const { subject, description } = req.body;
+
+    // STEP 1: Validate required fields
+    console.log("\n📝 STEP 1: Validating required fields...");
+    const missingFields = [];
+    if (!subject) missingFields.push('subject');
+    if (!description) missingFields.push('description');
+    
+    if (missingFields.length > 0) {
+      console.log("❌ Missing fields:", missingFields);
+      return res.status(400).json({ 
+        success: false,
+        message: `Missing required fields: ${missingFields.join(', ')}`,
+        missingFields
+      });
+    }
+    console.log("✅ All required fields present");
+
+    console.log("\n📏 STEP 2: Validating field lengths...");
+    if (subject.length > 200) {
+      console.log("❌ Subject too long:", subject.length);
+      return res.status(400).json({ 
+        success: false, 
+        message: "Subject cannot exceed 200 characters" 
+      });
+    }
+    if (description.length > 1000) {
+      console.log("❌ Description too long:", description.length);
+      return res.status(400).json({ 
+        success: false, 
+        message: "Description cannot exceed 1000 characters" 
+      });
+    }
+    console.log("✅ Field lengths valid");
+
+    console.log("\n👤 STEP 3: Fetching customer details...");
+    const customer = await User.findById(customerId).select('name email phoneNumber');
+    if (!customer) {
+      console.log("❌ Customer not found for ID:", customerId);
+      return res.status(404).json({ 
+        success: false, 
+        message: "Customer not found" 
+      });
+    }
+    console.log("✅ Customer found:", customer.name);
+
+    console.log("\n📄 STEP 4: Creating report...");
+    const Report = require("../Model/reportSchema");
+    
+    // Generate unique report ID
+    const reportId = `RPT-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    
+    const report = new Report({
+      reportId: reportId,
+      customer: {
+        id: customerId,
+        email: customer.email,
+        name: customer.name,
+        phone: customer.phoneNumber || 'N/A'
+      },
+      subject: subject.trim(),
+      description: description.trim(),
+      status: 'pending'
+    });
+
+    await report.save();
+    console.log("✅ Report created with ID:", reportId);
+
+    const responseData = {
+      success: true,
+      message: "Report submitted successfully",
+      report: {
+        reportId: report.reportId,
+        subject: report.subject,
+        description: report.description,
+        status: report.status,
+        createdAt: report.createdAt,
+        customer: {
+          name: report.customer.name,
+          email: report.customer.email
+        }
+      }
+    };
+
+    console.log("\n✅ REPORT CREATED SUCCESSFULLY!");
+    console.log("=".repeat(60) + "\n");
+
+    res.status(201).json(responseData);
+
+  } catch (err) {
+    console.error("\n❌ ERROR CREATING REPORT:");
+    console.error("   Error message:", err.message);
+    console.error("   Stack:", err.stack);
+    console.log("=".repeat(60) + "\n");
+    
+    res.status(500).json({ 
+      success: false, 
+      error: "INTERNAL_SERVER_ERROR",
+      message: err.message
+    });
+  }
+});
+
+
+router.get("/reports", auth, allowRoles("customer"), async (req, res) => {
+  console.log("\n" + "=".repeat(60));
+  console.log("🔵 [GET /customer/reports] Request received");
+  console.log("=".repeat(60));
+  console.log("📌 Customer ID:", req.user.id);
+  console.log("📌 Query Params:", req.query);
+  
+  try {
+    const customerId = req.user.id;
+    const { status } = req.query; 
+
+    console.log("\n📄 STEP 1: Fetching reports...");
+    const Report = require("../Model/reportSchema");
+    
+    const filter = { 'customer.id': customerId };
+    if (status && status !== 'all') {
+      filter.status = status;
+      console.log(`📌 Filtering by status: ${status}`);
+    }
+
+    const reports = await Report.find(filter)
+      .sort({ createdAt: -1 }) // Latest first
+      .select('reportId subject description status createdAt updatedAt resolvedAt resolutionNotes');
+
+    console.log(`📊 Found ${reports.length} reports for customer`);
+
+    const totalReports = reports.length;
+    const pendingReports = reports.filter(r => r.status === 'pending').length;
+    const solvedReports = reports.filter(r => r.status === 'solved').length;
+
+    console.log(`📊 Stats: Total=${totalReports}, Pending=${pendingReports}, Solved=${solvedReports}`);
+
+    const formattedReports = reports.map(report => ({
+      reportId: report.reportId,
+      subject: report.subject,
+      description: report.description,
+      status: report.status,
+      createdAt: report.createdAt,
+      updatedAt: report.updatedAt,
+      resolvedAt: report.resolvedAt || null,
+      resolutionNotes: report.resolutionNotes || null
+    }));
+
+    const responseData = {
+      success: true,
+      count: totalReports,
+      statistics: {
+        total: totalReports,
+        pending: pendingReports,
+        solved: solvedReports
+      },
+      reports: formattedReports
+    };
+
+    console.log("\n✅ REPORTS FETCHED SUCCESSFULLY!");
+    console.log("=".repeat(60) + "\n");
+
+    res.json(responseData);
+
+  } catch (err) {
+    console.error("\n❌ ERROR FETCHING REPORTS:");
+    console.error("   Error message:", err.message);
+    console.error("   Stack:", err.stack);
+    console.log("=".repeat(60) + "\n");
+    
+    res.status(500).json({ 
+      success: false, 
+      error: "INTERNAL_SERVER_ERROR",
+      message: err.message
+    });
+  }
+});
+
+router.get("/report/:reportId", auth, allowRoles("customer"), async (req, res) => {
+  console.log("\n" + "=".repeat(60));
+  console.log("🔵 [GET /customer/report/:reportId] Request received");
+  console.log("=".repeat(60));
+  console.log("📌 Report ID:", req.params.reportId);
+  console.log("📌 Customer ID:", req.user.id);
+  
+  try {
+    const customerId = req.user.id;
+    const { reportId } = req.params;
+
+    console.log("\n📄 STEP 1: Fetching report...");
+    const Report = require("../Model/reportSchema");
+    
+    const report = await Report.findOne({ 
+      reportId: reportId,
+      'customer.id': customerId
+    });
+
+    if (!report) {
+      console.log("❌ Report not found or not owned by customer");
+      return res.status(404).json({ 
+        success: false, 
+        message: "Report not found" 
+      });
+    }
+
+    console.log("✅ Report found:", report.subject);
+
+    const responseData = {
+      success: true,
+      report: {
+        reportId: report.reportId,
+        subject: report.subject,
+        description: report.description,
+        status: report.status,
+        customer: {
+          name: report.customer.name,
+          email: report.customer.email
+        },
+        createdAt: report.createdAt,
+        updatedAt: report.updatedAt,
+        resolvedAt: report.resolvedAt || null,
+        resolutionNotes: report.resolutionNotes || null
+      }
+    };
+
+    console.log("\n✅ REPORT DETAILS FETCHED SUCCESSFULLY!");
+    console.log("=".repeat(60) + "\n");
+
+    res.json(responseData);
+
+  } catch (err) {
+    console.error("\n❌ ERROR FETCHING REPORT DETAILS:");
+    console.error("   Error message:", err.message);
+    console.log("=".repeat(60) + "\n");
+    
+    res.status(500).json({ 
+      success: false, 
+      error: "INTERNAL_SERVER_ERROR",
+      message: err.message
+    });
   }
 });
 

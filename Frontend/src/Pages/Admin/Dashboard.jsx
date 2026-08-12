@@ -43,23 +43,59 @@ const Dashboard = () => {
     const alerts = [];
 
     const unitList = machineEntries.map(([id, data]) => {
-      const logs = data.logs || {};
-      const costPerTap = data.costPerTap || 0.50; // Get cost per tap from machine data
+      // Get logs and cost per tap from machine data
+      const logs = data?.logs || {};
+      // Default cost per tap from analytics page - using ₹70.00
+      const costPerTap = data?.costPerTap || 70.00; 
       let machineMonthTaps = 0;
       let machineActiveDays = 0;
+      let machineTotalTaps = 0;
 
+      // First, calculate total taps for this machine (for efficiency comparison)
       Object.entries(logs).forEach(([date, log]) => {
-        const logDate = new Date(date);
-        const count = log.tapCount || 0;
-        
-        if (logDate.getFullYear() === currentYear && logDate.getMonth() === currentMonth) {
-          machineMonthTaps += count;
-          dailyMap[date] = (dailyMap[date] || 0) + count;
-          if (count > 0) machineActiveDays++;
+        const count = log?.tapCount || log?.taps || log?.count || 0;
+        machineTotalTaps += count;
+      });
+
+      // Process logs for current month
+      Object.entries(logs).forEach(([date, log]) => {
+        try {
+          // Parse the date - handle different formats
+          let logDate;
+          if (date.includes('/')) {
+            // Handle DD/MM/YYYY format
+            const parts = date.split('/');
+            logDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+          } else {
+            logDate = new Date(date);
+          }
+          
+          // Check if date is valid
+          if (isNaN(logDate.getTime())) {
+            console.warn(`Invalid date format: ${date}`);
+            return;
+          }
+          
+          const count = log?.tapCount || log?.taps || log?.count || 0;
+          
+          // Check if log belongs to current month
+          if (logDate.getFullYear() === currentYear && logDate.getMonth() === currentMonth) {
+            machineMonthTaps += count;
+            
+            // Format date consistently for dailyMap
+            const dateKey = `${logDate.getDate()}/${logDate.getMonth() + 1}/${logDate.getFullYear()}`;
+            dailyMap[dateKey] = (dailyMap[dateKey] || 0) + count;
+            
+            if (count > 0) {
+              machineActiveDays++;
+            }
+          }
+        } catch (err) {
+          console.warn(`Error processing log for ${id} on ${date}:`, err);
         }
       });
 
-      // Use the machine's specific cost per tap
+      // Calculate revenue for this month only
       const machineRevenue = machineMonthTaps * costPerTap;
       grandTotalRevenue += machineRevenue;
       totalTapsMonth += machineMonthTaps;
@@ -67,42 +103,69 @@ const Dashboard = () => {
       const isActive = machineMonthTaps > 0;
       if (isActive) activeMachinesCount++;
 
-      if (!isActive) {
+      if (!isActive && machineMonthTaps === 0) {
         alerts.push({ id, message: "No activity recorded this month" });
+      }
+
+      // Calculate efficiency based on active days in month
+      let efficiency = "0%";
+      if (machineMonthTaps > 0 && machineActiveDays > 0) {
+        const efficiencyValue = Math.min(100, (machineActiveDays / 30) * 100);
+        efficiency = `${efficiencyValue.toFixed(0)}%`;
       }
 
       return {
         id,
-        owner: data.owner || `Owner ${id.slice(-4)}`,
+        owner: data?.owner || `Owner ${id.slice(-4)}`,
         monthTaps: machineMonthTaps,
+        totalTaps: machineTotalTaps,
         activeDays: machineActiveDays,
         revenue: machineRevenue,
         costPerTap: costPerTap,
         status: isActive ? "Active" : "Idle",
-        efficiency: machineMonthTaps > 0 ? `${Math.min(98, (machineActiveDays / 30) * 100).toFixed(0)}%` : "0%"
+        efficiency: efficiency,
+        state: data?.state || 'Unknown',
+        country: data?.country || 'Unknown'
       };
     });
 
+    // Sort dailyTrend by date
     const dailyTrend = Object.entries(dailyMap)
-      .sort((a, b) => new Date(a[0]) - new Date(b[0]))
+      .sort((a, b) => {
+        const dateA = a[0].split('/');
+        const dateB = b[0].split('/');
+        return new Date(dateA[2], dateA[1] - 1, dateA[0]) - new Date(dateB[2], dateB[1] - 1, dateB[0]);
+      })
       .slice(-7)
       .map(([date, count]) => ({
-        date: new Date(date).getDate(),
+        date: date,
         taps: count
       }));
+
+    // Calculate avg daily taps (using actual days in month)
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const avgDailyTaps = daysInMonth > 0 ? Math.round(totalTapsMonth / daysInMonth) : 0;
+
+    // Get top performers by revenue
+    const topPerformers = [...unitList]
+      .filter(m => m.monthTaps > 0)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 3);
 
     return {
       totalTapsMonth,
       activeCount: activeMachinesCount,
       totalMachines: machineEntries.length,
       unitList,
+      topPerformers,
       totalRevenue: grandTotalRevenue,
       dailyTrend,
       alerts,
-      uptime: (activeMachinesCount / machineEntries.length) * 100,
+      uptime: machineEntries.length > 0 ? (activeMachinesCount / machineEntries.length) * 100 : 0,
       monthName: `${monthNames[currentMonth]} ${currentYear}`,
-      avgDailyTaps: Math.round(totalTapsMonth / 30) || 0,
-      projectedRevenue: grandTotalRevenue * 1.15
+      avgDailyTaps: avgDailyTaps,
+      projectedRevenue: grandTotalRevenue * 1.15,
+      daysInMonth: daysInMonth
     };
   }, [machines]);
 
@@ -113,6 +176,16 @@ const Dashboard = () => {
       <FiAlertCircle /> Error loading data: {error.message}
     </div>
   );
+
+  // Format date for display
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      return `${parts[0]}/${parts[1]}`;
+    }
+    return dateStr;
+  };
 
   return (
     <div className="w-full p-2 md:p-4 bg-gray-50 min-h-screen">
@@ -151,7 +224,7 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* Charts Row - FIXED: Added grid container */}
+      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm">
           <div className="flex justify-between items-center mb-4 sm:mb-6">
@@ -163,14 +236,17 @@ const Dashboard = () => {
             </span>
           </div>
 
-          {stats.dailyTrend.length > 0 ? (
+          {stats.dailyTrend.length > 0 && stats.dailyTrend.some(d => d.taps > 0) ? (
             <div className="w-full h-64 sm:h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={stats.dailyTrend}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                  <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10 }} />
                   <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
+                  <Tooltip 
+                    formatter={(value) => [`${value} taps`, 'Taps']}
+                    labelFormatter={(label) => `Date: ${label}`}
+                  />
                   <Line
                     type="monotone"
                     dataKey="taps"
@@ -184,7 +260,7 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="h-64 flex items-center justify-center text-gray-400">
-              No data available for this month
+              No tap data available for this month
             </div>
           )}
         </div>
@@ -198,16 +274,16 @@ const Dashboard = () => {
                 <span>₹{(stats.totalRevenue/1000).toFixed(1)}k</span>
               </div>
               <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                <div className="bg-green-500 h-full" style={{ width: `${(stats.totalRevenue / stats.projectedRevenue) * 100}%` }} />
+                <div className="bg-green-500 h-full" style={{ width: `${Math.min(100, (stats.totalRevenue / (stats.projectedRevenue || 1)) * 100)}%` }} />
               </div>
             </div>
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-bold text-gray-600">
                 <span>Target Progress</span>
-                <span>{Math.min(100, Math.round((stats.totalRevenue / stats.projectedRevenue) * 100))}%</span>
+                <span>{Math.min(100, Math.round((stats.totalRevenue / (stats.projectedRevenue || 1)) * 100))}%</span>
               </div>
               <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                <div className="bg-blue-600 h-full" style={{ width: `${Math.min(100, (stats.totalRevenue / stats.projectedRevenue) * 100)}%` }} />
+                <div className="bg-blue-600 h-full" style={{ width: `${Math.min(100, (stats.totalRevenue / (stats.projectedRevenue || 1)) * 100)}%` }} />
               </div>
             </div>
             <div className="pt-4 mt-2 border-t border-gray-100">
@@ -241,25 +317,36 @@ const Dashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {stats.unitList.slice(0, 6).map((m) => (
-                  <tr key={m.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-xs font-bold text-gray-800">{m.id}</td>
-                    <td className="px-6 py-4 text-xs text-gray-500">{m.owner}</td>
-                    <td className="px-6 py-4 text-xs font-bold">{m.monthTaps.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-xs text-gray-600">{m.activeDays}/30</td>
-                    <td className="px-6 py-4 text-xs font-bold text-green-600">₹{m.revenue.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-xs text-gray-600">₹{m.costPerTap.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-xs text-gray-600">{m.efficiency}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold flex items-center w-fit gap-1 ${
-                        m.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        <span className={`w-1 h-1 rounded-full ${m.status === 'Active' ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        {m.status}
-                      </span>
+                {stats.unitList.length > 0 ? (
+                  stats.unitList
+                    .sort((a, b) => b.monthTaps - a.monthTaps)
+                    .slice(0, 6)
+                    .map((m) => (
+                      <tr key={m.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 text-xs font-bold text-gray-800">{m.id}</td>
+                        <td className="px-6 py-4 text-xs text-gray-500">{m.owner}</td>
+                        <td className="px-6 py-4 text-xs font-bold">{m.monthTaps.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-xs text-gray-600">{m.activeDays}/{stats.daysInMonth || 30}</td>
+                        <td className="px-6 py-4 text-xs font-bold text-green-600">₹{m.revenue.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-xs text-gray-600">₹{m.costPerTap.toFixed(2)}</td>
+                        <td className="px-6 py-4 text-xs text-gray-600">{m.efficiency}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-1 rounded-full text-[10px] font-bold flex items-center w-fit gap-1 ${
+                            m.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                          }`}>
+                            <span className={`w-1 h-1 rounded-full ${m.status === 'Active' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                            {m.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                ) : (
+                  <tr>
+                    <td colSpan="8" className="px-6 py-8 text-center text-gray-500 text-sm">
+                      No machine data available for this month
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -275,7 +362,7 @@ const Dashboard = () => {
               {stats.alerts.length} Machine{stats.alerts.length !== 1 ? 's' : ''} Inactive This Month
             </p>
             {stats.alerts.length > 0 && (
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 space-y-2 max-h-32 overflow-y-auto">
                 {stats.alerts.slice(0, 3).map((alert, idx) => (
                   <div key={idx} className="text-[10px] text-orange-700 bg-orange-100 p-2 rounded">
                     {alert.id}: {alert.message}
@@ -283,18 +370,21 @@ const Dashboard = () => {
                 ))}
               </div>
             )}
+            {stats.alerts.length === 0 && (
+              <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
+                ✓ All machines are active this month
+              </div>
+            )}
           </div>
 
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4">Top Performers This Month</h3>
             <div className="space-y-4">
-              {stats.unitList
-                .sort((a,b) => b.revenue - a.revenue)
-                .slice(0, 3)
-                .map((m, i) => (
+              {stats.topPerformers.length > 0 ? (
+                stats.topPerformers.map((m, i) => (
                   <div key={i} className="flex justify-between items-center bg-gradient-to-r from-gray-50 to-white p-3 rounded-xl border border-gray-100">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${i === 0 ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-600'}`}>
+                      <div className={`p-2 rounded-lg ${i === 0 ? 'bg-yellow-100 text-yellow-600' : i === 1 ? 'bg-gray-100 text-gray-600' : 'bg-orange-100 text-orange-600'}`}>
                         <FiZap />
                       </div>
                       <div>
@@ -304,11 +394,12 @@ const Dashboard = () => {
                     </div>
                     <span className="text-xs font-bold text-green-600">₹{m.revenue.toLocaleString()}</span>
                   </div>
-                ))}
+                ))
+              ) : (
+                <p className="text-xs text-gray-400 text-center py-4">No active machines this month</p>
+              )}
             </div>
           </div>
-
-          
         </div>
       </div>
     </div>

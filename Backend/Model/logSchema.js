@@ -24,12 +24,17 @@ const logSchema = new mongoose.Schema({
       'CLEANING_STARTED', 
       'CLEANING_COMPLETED', 
       'STOP',
-      'DISINFECTION_STARTED',      // ADD THIS
-      'DISINFECTION_STOPPED',      // ADD THIS
-      'DISINFECTION_COMPLETED',    // ADD THIS
-      'CYCLE_COMPLETED'            // ADD THIS
+      'DISINFECTION_STARTED',
+      'DISINFECTION_STOPPED',
+      'DISINFECTION_COMPLETED',
+      'CYCLE_COMPLETED'
     ],
     default: 'TAP_DISPENSED'
+  },
+  type: {
+    type: String,
+    enum: ['QR', 'operator'],
+    default: 'operator'
   },
   status: {
     type: String,
@@ -57,6 +62,14 @@ const logSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  qrId: {
+    type: String,
+    default: null
+  },
+  paymentId: {
+    type: String,
+    default: null
+  },
   metadata: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
@@ -73,5 +86,7 @@ const logSchema = new mongoose.Schema({
 logSchema.index({ machineId: 1, date: -1 });
 logSchema.index({ machineId: 1, timestamp: -1 });
 logSchema.index({ action: 1, status: 1 });
+logSchema.index({ type: 1 });
+logSchema.index({ qrId: 1 });
 
 module.exports = mongoose.model("Log", logSchema);

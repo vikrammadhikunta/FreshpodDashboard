@@ -3,23 +3,13 @@ import React, { useState, useEffect, useContext } from 'react';
 import { DataContext } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import axiosInstance from '../../config/axios';
-import axios from 'axios';
-
 import { 
   FiCpu, FiActivity, FiDollarSign, FiUsers, FiTrendingUp, 
   FiCalendar, FiMapPin, FiSettings, FiUserPlus, FiUser, 
   FiTrash2, FiEdit2, FiPlus, FiX, FiRefreshCw, FiCheckCircle,
-  FiAlertCircle, FiBarChart2, FiClock, FiZap, FiShield
+  FiAlertCircle, FiBarChart2, FiClock, FiZap, FiShield,
+  FiQrCode
 } from 'react-icons/fi';
-
-// Create a separate axios instance for QR service
-const qrService = axios.create({
-  baseURL: 'https://freshpod-ota-r3b9.onrender.com',
-  timeout: 100000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
 
 const CustomerDashboard = () => {
   const { machines, loading, refetch } = useContext(DataContext);
@@ -35,10 +25,10 @@ const CustomerDashboard = () => {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   
-  // QR State
+  // QR Payment State
   const [qrAmount, setQrAmount] = useState(49);
   const [selectedQRMachine, setSelectedQRMachine] = useState(null);
-  const [qrSubmitting, setQrSubmitting] = useState(false);
+  const [qrPaymentLoading, setQrPaymentLoading] = useState(false);
   
   // Operator form state
   const [operatorForm, setOperatorForm] = useState({
@@ -98,99 +88,58 @@ const CustomerDashboard = () => {
     }
   };
 
-
-// Handle QR Amount Update - Sending the index of the selected amount
-const handleQRUpdate = async (e) => {
-  e.preventDefault();
-  
-  if (!selectedQRMachine) {
-    setMessage({ type: 'error', text: 'Please select a machine' });
-    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-    return;
-  }
-
-  setQrSubmitting(true);
-  setMessage({ type: '', text: '' });
-
-  const machineId = selectedQRMachine.machineId;
-  const amount = qrAmount;
-  
-  // Find the index of the selected amount in the options array
-  const amountIndex = qrAmountOptions.indexOf(amount);
-  
-  // If amount not found, default to 0
-  const qrValueToSend = amountIndex !== -1 ? amountIndex : 0;
-
-  try {
-    console.log(`Calling QR service: /api/machine/${machineId}/qr`);
-    console.log(`Selected amount: ₹${amount}, Index: ${qrValueToSend}`);
-    const response = await qrService.put(
-      `/api/machine/${machineId}/qr`,
-      { 
-        qrValue: qrValueToSend  // Send the index (0, 1, 2, 3, 4, 5, or 6)
-      },
-      { 
-        headers: { 
-          Authorization: `Bearer ${accessToken}`
-        }
-      }
-    );
-    
-    console.log('QR updated successfully:', response.data);
-    
-    // Close QR modal immediately
-    setShowQRModal(false);
-    setSelectedQRMachine(null);
-    setQrAmount(amount);
-    
-    // Show success toast with both amount and index
-    setMessage({ 
-      type: 'success', 
-      text: `✅ QR updated successfully for machine ${machineId} to ₹${amount} (index: ${qrValueToSend})` 
-    });
-    
-    // Refresh data
-    fetchDashboardData();
-    fetchCustomerMachines();
-    refetch();
-    
-    setTimeout(() => setMessage({ type: '', text: '' }), 4000);
-    
-  } catch (error) {
-    console.error('Error updating QR:', error);
-    
-    // Close QR modal immediately
-    setShowQRModal(false);
-    setSelectedQRMachine(null);
-    
-    // Show error toast with more details
-    let errorMessage = 'Failed to update QR';
-    
-    if (error.response?.status === 404) {
-      errorMessage = '❌ QR service endpoint not found. Please check if the QR service is running.';
-    } else if (error.response?.status === 401) {
-      errorMessage = '❌ Authentication failed. Please check your access token.';
-    } else if (error.response?.status === 500) {
-      errorMessage = '❌ QR service server error. Please try again later.';
-    } else if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-    } else if (error.message) {
-      errorMessage = `Error: ${error.message}`;
+  // Handle QR Payment
+  const handleQRPayment = async () => {
+    if (!selectedQRMachine) {
+      setMessage({ type: 'error', text: 'Please select a machine' });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      return;
     }
-    
-    setMessage({ 
-      type: 'error', 
-      text: errorMessage 
-    });
-    setTimeout(() => setMessage({ type: '', text: '' }), 5000);
-  } finally {
-    setQrSubmitting(false);
-  }
-};
+
+    setQrPaymentLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const payload = {
+        machineId: selectedQRMachine._id,
+        amount: qrAmount,
+        machineIdNumber: selectedQRMachine.machineId
+      };
+
+      console.log('QR Payment payload:', payload);
+
+      const response = await axiosInstance.post('/customer/qr-payment', payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+
+      setMessage({ type: 'success', text: `Payment of ₹${qrAmount} successful for ${selectedQRMachine.machineId}!` });
+      setTimeout(() => setMessage({ type: '', text: '' }), 4000);
+      
+      // Refresh data
+      fetchDashboardData();
+      fetchCustomerMachines();
+      refetch();
+      
+      // Close QR modal after success
+      setTimeout(() => {
+        setShowQRModal(false);
+        setSelectedQRMachine(null);
+        setQrAmount(49);
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Error processing QR payment:', error);
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to process payment' });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    } finally {
+      setQrPaymentLoading(false);
+    }
+  };
 
   const handleCreateOperator = async (e) => {
     e.preventDefault();
     
+    // Validate phone number
     if (!operatorForm.phoneNumber || operatorForm.phoneNumber.length !== 10) {
       setMessage({ type: 'error', text: 'Please enter a valid 10-digit phone number' });
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
@@ -208,6 +157,8 @@ const handleQRUpdate = async (e) => {
         assignedMachineIds: operatorForm.assignedMachineIds
       };
       
+      console.log('Creating operator with payload:', payload);
+      
       const response = await axiosInstance.post('/customer/operator/create', payload, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
@@ -215,6 +166,7 @@ const handleQRUpdate = async (e) => {
       setMessage({ type: 'success', text: 'Operator created successfully!' });
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
       
+      // Reset form and close modal
       setOperatorForm({ name: '', email: '', phoneNumber: '', assignedMachineIds: [] });
       setShowOperatorModal(false);
       fetchOperators();
@@ -304,7 +256,7 @@ const handleQRUpdate = async (e) => {
 
   const openQRModal = (machine) => {
     setSelectedQRMachine(machine);
-    setQrAmount(machine.qrAmount || 49);
+    setQrAmount(49);
     setShowQRModal(true);
   };
 
@@ -317,7 +269,10 @@ const handleQRUpdate = async (e) => {
     }));
   };
 
+  // Convert machines object to array
   const machinesArray = machines ? Object.values(machines) : [];
+
+  // Calculate summary stats
   const totalTaps = machinesArray.reduce((sum, m) => sum + (m.totalTaps || 0), 0);
   const totalRevenue = machinesArray.reduce((sum, m) => sum + ((m.totalTaps || 0) * (m.costPerTap || 0)), 0);
 
@@ -331,6 +286,7 @@ const handleQRUpdate = async (e) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Main Content */}
       <div className="p-6">
         {/* Welcome Section */}
         <div className="mb-8">
@@ -438,10 +394,10 @@ const handleQRUpdate = async (e) => {
                         <div className="flex gap-2">
                           <button
                             onClick={() => openQRModal(machine)}
-                            className="px-3 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-sm font-medium"
-                            title="Set QR Amount"
+                            className="p-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+                            title="QR Payment"
                           >
-                            QR
+                            <FiQrCode size={18} />
                           </button>
                           <button
                             onClick={() => openSettingsModal(machine)}
@@ -470,8 +426,10 @@ const handleQRUpdate = async (e) => {
                           <p className="text-lg font-bold text-blue-600">₹{machine.costPerTap || 0}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">QR Amount</p>
-                          <p className="text-lg font-bold text-green-600">₹{qrAmount || 49}</p>
+                          <p className="text-xs text-gray-500">Revenue</p>
+                          <p className="text-lg font-bold text-green-600">
+                            ₹{((machine.totalTaps || 0) * (machine.costPerTap || 0)).toLocaleString()}
+                          </p>
                         </div>
                       </div>
 
@@ -567,14 +525,14 @@ const handleQRUpdate = async (e) => {
         </div>
       </div>
 
-      {/* QR AMOUNT MODAL */}
+      {/* QR PAYMENT MODAL */}
       {showQRModal && selectedQRMachine && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto relative">
             <div className="sticky top-0 bg-white border-b p-5 flex justify-between items-center z-10">
               <div>
-                <h2 className="text-xl font-bold">Set QR Amount</h2>
-                <p className="text-sm text-gray-500">Update QR payment amount for this machine</p>
+                <h2 className="text-xl font-bold">QR Payment</h2>
+                <p className="text-sm text-gray-500">Pay for water tap</p>
               </div>
               <button onClick={() => {
                 setShowQRModal(false);
@@ -585,27 +543,18 @@ const handleQRUpdate = async (e) => {
               </button>
             </div>
 
-            <form onSubmit={handleQRUpdate} className="p-6 space-y-6">
-              {/* Auto-filled Machine ID - Read Only */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Machine ID</label>
-                <div className="bg-gray-100 rounded-lg p-3 flex items-center justify-between">
-                  <span className="font-mono font-bold text-gray-800">{selectedQRMachine.machineId}</span>
-                  <span className="text-xs text-gray-500">ID: {selectedQRMachine._id}</span>
-                </div>
-              </div>
-
-              {/* Machine Location - Read Only */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                <div className="bg-gray-100 rounded-lg p-3">
-                  <span className="text-gray-700">{selectedQRMachine.location}, {selectedQRMachine.state}</span>
-                </div>
+            <div className="p-6 space-y-6">
+              {/* Machine Info */}
+              <div className="bg-blue-50 rounded-lg p-4">
+                <p className="text-sm text-gray-600">Machine</p>
+                <p className="font-bold text-lg">{selectedQRMachine.machineId}</p>
+                <p className="text-sm text-gray-500">{selectedQRMachine.location}, {selectedQRMachine.state}</p>
+                <p className="text-xs text-gray-400 mt-1">Machine ID: {selectedQRMachine._id}</p>
               </div>
 
               {/* Amount Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Select QR Amount</label>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Select Amount</label>
                 <div className="grid grid-cols-3 gap-3">
                   {qrAmountOptions.map((amount) => (
                     <button
@@ -624,32 +573,34 @@ const handleQRUpdate = async (e) => {
                 </div>
               </div>
 
-              {/* Current QR Amount Display */}
+              {/* Selected Amount Display */}
               <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <p className="text-sm text-gray-600">Selected QR Amount</p>
+                <p className="text-sm text-gray-600">Total Amount</p>
                 <p className="text-3xl font-bold text-green-600">₹{qrAmount}</p>
               </div>
 
-              {/* Submit Button */}
+              {/* Payment Button */}
               <button
-                type="submit"
-                disabled={qrSubmitting}
+                onClick={handleQRPayment}
+                disabled={qrPaymentLoading}
                 className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
               >
-                {qrSubmitting ? (
+                {qrPaymentLoading ? (
                   <>
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    Updating...
+                    Processing...
                   </>
                 ) : (
-                  'Update QR Amount'
+                  <>
+                    <FiQrCode size={20} /> Pay ₹{qrAmount}
+                  </>
                 )}
               </button>
 
               <p className="text-xs text-gray-400 text-center">
-                This will update the QR payment amount for this machine
+                You will be charged ₹{qrAmount} for this tap
               </p>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -839,6 +790,7 @@ const handleQRUpdate = async (e) => {
             </div>
 
             <div className="p-6">
+              {/* Stats Grid */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-gray-50 rounded-lg p-4 text-center">
                   <p className="text-xs text-gray-500">Total Lifetime Taps</p>
@@ -852,6 +804,7 @@ const handleQRUpdate = async (e) => {
                 </div>
               </div>
 
+              {/* Settings Info */}
               <div className="bg-blue-50 rounded-lg p-4 mb-6">
                 <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
                   <FiSettings /> Current Settings
@@ -862,8 +815,8 @@ const handleQRUpdate = async (e) => {
                     <p className="font-bold text-blue-600">₹{selectedMachine.costPerTap || 0}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500">QR Amount</p>
-                    <p className="font-bold text-green-600">₹{selectedMachine.qrAmount || 49}</p>
+                    <p className="text-gray-500">Rent/Month</p>
+                    <p className="font-bold">₹{selectedMachine.rentPerMonth || 0}</p>
                   </div>
                   <div>
                     <p className="text-gray-500">Maintenance</p>
@@ -872,18 +825,20 @@ const handleQRUpdate = async (e) => {
                 </div>
               </div>
 
+              {/* Quick QR Payment Button */}
               <button
                 onClick={() => {
                   setSelectedMachine(null);
                   openQRModal(selectedMachine);
                 }}
-                className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 mb-6"
+                className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
               >
-                Update QR Amount
+                <FiQrCode size={20} /> Make QR Payment
               </button>
 
+              {/* Recent Logs */}
               {selectedMachine.logs && Object.keys(selectedMachine.logs).length > 0 && (
-                <div>
+                <div className="mt-6">
                   <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                     <FiClock /> Recent Activity
                   </h3>

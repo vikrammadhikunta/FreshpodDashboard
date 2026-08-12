@@ -6,11 +6,19 @@ import {
   FiCalendar, FiCpu, FiDownload, FiFilter, FiRefreshCw,
   FiActivity, FiDollarSign, FiUsers, FiClock, FiAward,
   FiChevronLeft, FiChevronRight, FiMaximize2, FiMinimize2,
-  FiSun, FiMoon, FiZap, FiMapPin
+  FiSun, FiMoon, FiZap, FiMapPin, FiSearch
 } from 'react-icons/fi';
+import {SanitizationLevel , SanitizationIndicator} from '../Sanitization.jsx';
 
 const Analytics = () => {
-  const { machines, loading } = useContext(DataContext);
+  console.log("=== Analytics Component Mounted ===");
+  
+  const context = useContext(DataContext);
+  console.log("DataContext value:", context);
+  
+  const { machines, loading } = context || {};
+  console.log("Machines data:", machines);
+  console.log("Loading state:", loading);
   
   // State for date range and machine selection
   const [dateRange, setDateRange] = useState('lifetime');
@@ -24,93 +32,182 @@ const Analytics = () => {
   const [selectedState, setSelectedState] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Machine search state
+  const [machineSearchTerm, setMachineSearchTerm] = useState('');
+  
+  // Specific machine search state
+  const [specificMachineSearch, setSpecificMachineSearch] = useState('');
+  const [showMachineSuggestions, setShowMachineSuggestions] = useState(false);
+
+  console.log("Initial filter states:", { dateRange, selectedState, selectedCountry, selectedMachine });
 
   // Get all unique states and countries from machines
   const { uniqueStates, uniqueCountries, machineList } = useMemo(() => {
-    if (!machines) return { uniqueStates: [], uniqueCountries: [], machineList: [] };
+    console.log("useMemo running for unique states/countries");
+    console.log("machines in useMemo:", machines);
+    
+    if (!machines) {
+      console.log("No machines data available");
+      return { uniqueStates: [], uniqueCountries: [], machineList: [] };
+    }
     
     const states = new Set();
     const countries = new Set();
     const machineIds = [];
     
+    console.log("Processing machines entries:", Object.entries(machines).length);
+    
     Object.entries(machines).forEach(([id, machine]) => {
+      console.log(`Processing machine ${id}:`, machine);
       machineIds.push(id);
-      if (machine.state) states.add(machine.state);
-      if (machine.country) countries.add(machine.country);
+      if (machine && machine.state) {
+        console.log(`Adding state: ${machine.state} for machine ${id}`);
+        states.add(machine.state);
+      } else {
+        console.warn(`Machine ${id} has no state property or machine is undefined`);
+      }
+      if (machine && machine.country) {
+        console.log(`Adding country: ${machine.country} for machine ${id}`);
+        countries.add(machine.country);
+      } else {
+        console.warn(`Machine ${id} has no country property or machine is undefined`);
+      }
     });
     
-    return {
+    const result = {
       uniqueStates: Array.from(states).sort(),
       uniqueCountries: Array.from(countries).sort(),
       machineList: machineIds
     };
+    
+    console.log("Unique states:", result.uniqueStates);
+    console.log("Unique countries:", result.uniqueCountries);
+    console.log("Machine list:", result.machineList);
+    
+    return result;
   }, [machines]);
+
+  // Filter machines for suggestions
+  const machineSuggestions = useMemo(() => {
+    if (!specificMachineSearch.trim() || !machineList.length) return [];
+    const searchLower = specificMachineSearch.toLowerCase().trim();
+    return machineList
+      .filter(id => id.toLowerCase().includes(searchLower))
+      .slice(0, 10); // Limit to 10 suggestions
+  }, [specificMachineSearch, machineList]);
 
   // Filter data based on all criteria
   const filteredData = useMemo(() => {
-    if (!machines) return null;
+    console.log("=== Filtering Data ===");
+    console.log("Input machines:", machines);
+    console.log("Selected filters:", { dateRange, selectedState, selectedCountry, selectedMachine, customStartDate, customEndDate });
+    
+    if (!machines) {
+      console.log("No machines available, returning null");
+      return null;
+    }
 
     let filteredMachines = { ...machines };
+    console.log("Initial filteredMachines keys:", Object.keys(filteredMachines).length);
     
     // Filter by state
     if (selectedState) {
+      console.log(`Filtering by state: ${selectedState}`);
+      const beforeCount = Object.keys(filteredMachines).length;
       filteredMachines = Object.fromEntries(
-        Object.entries(filteredMachines).filter(([id, machine]) => 
-          machine.state === selectedState
-        )
+        Object.entries(filteredMachines).filter(([id, machine]) => {
+          const match = machine.state === selectedState;
+          if (!match) console.log(`Filtering out machine ${id} - state: ${machine.state}`);
+          return match;
+        })
       );
+      console.log(`State filter: ${beforeCount} -> ${Object.keys(filteredMachines).length} machines`);
     }
     
     // Filter by country
     if (selectedCountry) {
+      console.log(`Filtering by country: ${selectedCountry}`);
+      const beforeCount = Object.keys(filteredMachines).length;
       filteredMachines = Object.fromEntries(
-        Object.entries(filteredMachines).filter(([id, machine]) => 
-          machine.country === selectedCountry
-        )
+        Object.entries(filteredMachines).filter(([id, machine]) => {
+          const match = machine.country === selectedCountry;
+          if (!match) console.log(`Filtering out machine ${id} - country: ${machine.country}`);
+          return match;
+        })
       );
+      console.log(`Country filter: ${beforeCount} -> ${Object.keys(filteredMachines).length} machines`);
     }
     
     // Filter by specific machine if selected
     if (dateRange === 'machine' && selectedMachine) {
-      filteredMachines = { [selectedMachine]: machines[selectedMachine] };
+      console.log(`Filtering by specific machine: ${selectedMachine}`);
+      if (machines[selectedMachine]) {
+        filteredMachines = { [selectedMachine]: machines[selectedMachine] };
+        console.log(`Found machine ${selectedMachine}`);
+      } else {
+        console.warn(`Machine ${selectedMachine} not found`);
+        filteredMachines = {};
+      }
     }
 
     // Filter by date range
     if (dateRange === 'custom' && customStartDate && customEndDate) {
+      console.log(`Applying custom date filter from ${customStartDate} to ${customEndDate}`);
       const start = new Date(customStartDate);
       const end = new Date(customEndDate);
       end.setHours(23, 59, 59, 999);
+      
+      console.log("Date range:", { start, end });
 
       const filtered = {};
       Object.entries(filteredMachines).forEach(([id, machine]) => {
         const logs = machine.logs || {};
+        console.log(`Processing machine ${id} logs:`, Object.keys(logs).length, "entries");
+        
         const filteredLogs = {};
         
         Object.entries(logs).forEach(([date, log]) => {
           const logDate = new Date(date);
           if (logDate >= start && logDate <= end) {
+            console.log(`Including log entry for ${date}`);
             filteredLogs[date] = log;
           }
         });
         
         if (Object.keys(filteredLogs).length > 0) {
+          console.log(`Machine ${id} has ${Object.keys(filteredLogs).length} logs in date range`);
           filtered[id] = { ...machine, logs: filteredLogs };
         } else if (dateRange !== 'machine') {
+          console.log(`Machine ${id} has no logs in date range, including with empty logs`);
           filtered[id] = { ...machine, logs: {} };
         }
       });
       filteredMachines = filtered;
+      console.log(`Date filter result: ${Object.keys(filteredMachines).length} machines`);
     }
 
+    console.log("Final filteredMachines keys:", Object.keys(filteredMachines));
     return filteredMachines;
   }, [machines, dateRange, customStartDate, customEndDate, selectedMachine, selectedState, selectedCountry]);
 
   // Calculate analytics with actual cost per tap from machines
   const analytics = useMemo(() => {
-    if (!filteredData) return null;
+    console.log("=== Calculating Analytics ===");
+    console.log("FilteredData:", filteredData);
+    
+    if (!filteredData) {
+      console.log("No filteredData available");
+      return null;
+    }
 
     const entries = Object.entries(filteredData);
-    if (entries.length === 0) return null;
+    console.log("Number of machine entries:", entries.length);
+    
+    if (entries.length === 0) {
+      console.log("No machine entries found");
+      return null;
+    }
 
     let totalTaps = 0;
     let totalRevenue = 0;
@@ -123,14 +220,20 @@ const Analytics = () => {
     const countryStats = {};
 
     entries.forEach(([id, machine]) => {
+      console.log(`Processing machine ${id}:`, machine);
+      
       const logs = machine.logs || {};
       const logEntries = Object.entries(logs);
+      console.log(`Machine ${id} has ${logEntries.length} log entries`);
+      
       let machineTaps = 0;
       const costPerTap = machine.costPerTap || 0.50;
+      console.log(`Machine ${id} costPerTap:`, costPerTap);
       
       // Track state and country stats
       const state = machine.state || 'Unknown';
       const country = machine.country || 'India';
+      console.log(`Machine ${id} location: ${state}, ${country}`);
       
       if (!stateStats[state]) {
         stateStats[state] = { taps: 0, revenue: 0, machines: 0 };
@@ -141,6 +244,7 @@ const Analytics = () => {
       
       logEntries.forEach(([date, log]) => {
         const count = log.tapCount || 0;
+        console.log(`Log entry ${date}: ${count} taps`);
         machineTaps += count;
         totalTaps += count;
         
@@ -149,6 +253,10 @@ const Analytics = () => {
         
         // Monthly aggregation
         const dateObj = new Date(date);
+        if (isNaN(dateObj.getTime())) {
+          console.error(`Invalid date: ${date}`);
+          return;
+        }
         const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
         monthlyData[monthKey] = (monthlyData[monthKey] || 0) + count;
         
@@ -181,10 +289,22 @@ const Analytics = () => {
       });
     });
 
+    console.log("Aggregation results:", {
+      totalTaps,
+      totalRevenue,
+      activeMachines,
+      totalMachines: entries.length,
+      dailyDataKeys: Object.keys(dailyData).length,
+      monthlyDataKeys: Object.keys(monthlyData).length,
+      yearlyDataKeys: Object.keys(yearlyData).length
+    });
+
     // Calculate trends
     const dailyTrend = Object.entries(dailyData)
       .sort((a, b) => new Date(a[0]) - new Date(b[0]))
       .slice(-90);
+    
+    console.log("Daily trend length:", dailyTrend.length);
     
     const monthlyTrend = Object.entries(monthlyData)
       .sort((a, b) => a[0].localeCompare(b[0]))
@@ -195,8 +315,12 @@ const Analytics = () => {
         return [label, val, key];
       });
     
+    console.log("Monthly trend length:", monthlyTrend.length);
+    
     const yearlyTrend = Object.entries(yearlyData)
       .sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+    
+    console.log("Yearly trend length:", yearlyTrend.length);
 
     // Calculate growth metrics
     const previousPeriod = monthlyTrend.slice(-6, -3);
@@ -204,13 +328,17 @@ const Analytics = () => {
     const previousAvg = previousPeriod.reduce((acc, [_, val]) => acc + val, 0) / (previousPeriod.length || 1);
     const currentAvg = currentPeriod.reduce((acc, [_, val]) => acc + val, 0) / (currentPeriod.length || 1);
     const growthRate = previousAvg > 0 ? ((currentAvg - previousAvg) / previousAvg) * 100 : 0;
+    
+    console.log("Growth metrics:", { previousAvg, currentAvg, growthRate });
 
     // Peak performance times
     const peakDay = dailyTrend.length > 0 ? dailyTrend.reduce((a, b) => a[1] > b[1] ? a : b)[0] : 'N/A';
     const peakMonth = monthlyTrend.length > 0 ? monthlyTrend.reduce((a, b) => a[1] > b[1] ? a : b)[0] : 'N/A';
     const peakYear = yearlyTrend.length > 0 ? yearlyTrend.reduce((a, b) => a[1] > b[1] ? a : b)[0] : 'N/A';
+    
+    console.log("Peak periods:", { peakDay, peakMonth, peakYear });
 
-    return {
+    const result = {
       totalTaps,
       totalRevenue,
       activeMachines,
@@ -230,10 +358,34 @@ const Analytics = () => {
       stateStats,
       countryStats
     };
+    
+    console.log("Final analytics result:", result);
+    return result;
   }, [filteredData]);
 
+  // Filter machine performance based on search term
+  const filteredMachinePerformance = useMemo(() => {
+    if (!analytics?.machinePerformance) return [];
+    
+    if (!machineSearchTerm.trim()) {
+      return analytics.machinePerformance;
+    }
+    
+    const searchLower = machineSearchTerm.toLowerCase().trim();
+    return analytics.machinePerformance.filter(machine => 
+      machine.id.toLowerCase().includes(searchLower) ||
+      machine.state?.toLowerCase().includes(searchLower) ||
+      machine.country?.toLowerCase().includes(searchLower) ||
+      machine.status?.toLowerCase().includes(searchLower)
+    );
+  }, [analytics?.machinePerformance, machineSearchTerm]);
+
   const handleExportData = () => {
-    if (!analytics) return;
+    console.log("Exporting data...");
+    if (!analytics) {
+      console.warn("No analytics data to export");
+      return;
+    }
     
     const exportData = {
       period: dateRange,
@@ -271,25 +423,33 @@ const Analytics = () => {
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
+    console.log("Export completed:", exportFileDefaultName);
   };
 
   const clearAllFilters = () => {
+    console.log("Clearing all filters");
     setSelectedState('');
     setSelectedCountry('');
     setSelectedMachine('');
     setDateRange('lifetime');
     setCustomStartDate('');
     setCustomEndDate('');
+    setMachineSearchTerm('');
+    setSpecificMachineSearch('');
+    setShowMachineSuggestions(false);
   };
 
-  // Interactive chart component (keep existing)
+  // Interactive chart component
   const InteractiveChart = ({ data, title, color, unit = 'taps' }) => {
+    console.log(`Rendering chart: ${title} with ${data?.length} data points`);
+    
     const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', value: 0 });
     const svgRef = useRef(null);
     const containerRef = useRef(null);
     const [dimensions, setDimensions] = useState({ width: 800, height: 400 });
 
     useEffect(() => {
+      console.log("Chart component mounted/updated");
       if (containerRef.current) {
         const updateDimensions = () => {
           const rect = containerRef.current.getBoundingClientRect();
@@ -302,6 +462,7 @@ const Analytics = () => {
     }, []);
 
     if (!data || data.length === 0) {
+      console.warn("No chart data available");
       return (
         <div ref={containerRef} className="h-full flex items-center justify-center text-gray-400">
           No data available for the selected period
@@ -440,19 +601,26 @@ const Analytics = () => {
   };
 
   const getChartData = () => {
+    console.log("Getting chart data for view:", chartView);
+    let result;
     switch(chartView) {
       case 'daily':
-        return analytics?.dailyTrend.slice(-30).map(([date, taps]) => ({
+        result = analytics?.dailyTrend.slice(-30).map(([date, taps]) => ({
           label: new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
           value: taps
         }));
+        break;
       case 'monthly':
-        return analytics?.monthlyTrend.map(([month, taps]) => ({ label: month, value: taps }));
+        result = analytics?.monthlyTrend.map(([month, taps]) => ({ label: month, value: taps }));
+        break;
       case 'lifetime':
-        return analytics?.yearlyTrend.map(([year, taps]) => ({ label: year.toString(), value: taps }));
+        result = analytics?.yearlyTrend.map(([year, taps]) => ({ label: year.toString(), value: taps }));
+        break;
       default:
-        return [];
+        result = [];
     }
+    console.log(`Chart data for ${chartView}:`, result?.length, "items");
+    return result;
   };
 
   const getChartColors = () => {
@@ -482,18 +650,29 @@ const Analytics = () => {
     }
   };
 
-  if (loading) return <Loading />;
+  // Early returns with logging
+  if (loading) {
+    console.log("Loading state active, showing loading component");
+    return <Loading />;
+  }
   
-  if (!analytics || analytics.totalTaps === 0) return (
-    <div className="w-full p-4 md:p-6 bg-gray-50 min-h-screen">
-      <div className="bg-white rounded-2xl p-10 text-center text-gray-500">
-        <FiBarChart2 className="text-4xl mx-auto mb-3 text-gray-300" />
-        <p className="text-lg font-medium">No tap data available</p>
-        <p className="text-sm">Start collecting tap data to see analytics insights.</p>
+  console.log("Loading complete, checking analytics data");
+  
+  if (!analytics || analytics.totalTaps === 0) {
+    console.log("No analytics data or zero taps:", analytics);
+    return (
+      <div className="w-full p-4 md:p-6 bg-gray-50 min-h-screen">
+        <div className="bg-white rounded-2xl p-10 text-center text-gray-500">
+          <FiBarChart2 className="text-4xl mx-auto mb-3 text-gray-300" />
+          <p className="text-lg font-medium">No tap data available</p>
+          <p className="text-sm">Start collecting tap data to see analytics insights.</p>
+          <p className="text-xs text-gray-400 mt-2">Debug: {!analytics ? 'analytics is null' : 'totalTaps = 0'}</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
+  console.log("Rendering main component with analytics data");
   return (
     <div className="w-full p-4 md:p-6 bg-gray-50 min-h-screen">
       {/* Header */}
@@ -504,7 +683,10 @@ const Analytics = () => {
         </div>
         <div className="flex gap-3">
           <button 
-            onClick={() => setShowFilters(!showFilters)}
+            onClick={() => {
+              console.log("Toggle filters");
+              setShowFilters(!showFilters);
+            }}
             className={`bg-white border px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
               (selectedState || selectedCountry) ? 'border-blue-500 text-blue-600' : 'border-gray-200 text-gray-700'
             }`}
@@ -514,7 +696,10 @@ const Analytics = () => {
           <button onClick={handleExportData} className="bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
             <FiDownload /> Export Report
           </button>
-          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2">
+          <button onClick={() => {
+            console.log("Refresh clicked");
+            window.location.reload();
+          }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2">
             <FiRefreshCw /> Refresh
           </button>
         </div>
@@ -536,7 +721,10 @@ const Analytics = () => {
               <label className="block text-xs font-bold text-gray-600 mb-1">State</label>
               <select
                 value={selectedState}
-                onChange={(e) => setSelectedState(e.target.value)}
+                onChange={(e) => {
+                  console.log("Selected state:", e.target.value);
+                  setSelectedState(e.target.value);
+                }}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All States</option>
@@ -549,7 +737,10 @@ const Analytics = () => {
               <label className="block text-xs font-bold text-gray-600 mb-1">Country</label>
               <select
                 value={selectedCountry}
-                onChange={(e) => setSelectedCountry(e.target.value)}
+                onChange={(e) => {
+                  console.log("Selected country:", e.target.value);
+                  setSelectedCountry(e.target.value);
+                }}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All Countries</option>
@@ -582,32 +773,133 @@ const Analytics = () => {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => { setDateRange('lifetime'); setSelectedMachine(''); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'lifetime' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+            <button onClick={() => { 
+              console.log("Set date range: lifetime");
+              setDateRange('lifetime'); 
+              setSelectedMachine(''); 
+              setSpecificMachineSearch('');
+              setShowMachineSuggestions(false);
+            }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'lifetime' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
               Lifetime
             </button>
-            <button onClick={() => { setDateRange('custom'); setSelectedMachine(''); setShowDatePicker(true); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'custom' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+            <button onClick={() => { 
+              console.log("Set date range: custom");
+              setDateRange('custom'); 
+              setSelectedMachine(''); 
+              setShowDatePicker(true); 
+              setSpecificMachineSearch('');
+              setShowMachineSuggestions(false);
+            }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'custom' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
               Custom Range
             </button>
-            <button onClick={() => { setDateRange('machine'); setShowDatePicker(false); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'machine' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+            <button onClick={() => { 
+              console.log("Set date range: machine");
+              setDateRange('machine'); 
+              setShowDatePicker(false); 
+            }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'machine' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
               Specific Machine
             </button>
           </div>
 
           {dateRange === 'custom' && showDatePicker && (
             <div className="flex gap-3 items-center flex-wrap">
-              <input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              <input 
+                type="date" 
+                value={customStartDate} 
+                onChange={(e) => {
+                  console.log("Custom start date:", e.target.value);
+                  setCustomStartDate(e.target.value);
+                }} 
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm" 
+              />
               <span className="text-gray-500">to</span>
-              <input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              <input 
+                type="date" 
+                value={customEndDate} 
+                onChange={(e) => {
+                  console.log("Custom end date:", e.target.value);
+                  setCustomEndDate(e.target.value);
+                }} 
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm" 
+              />
               <button onClick={() => setShowDatePicker(false)} className="px-3 py-2 text-gray-500 hover:text-gray-700">Apply</button>
             </div>
           )}
 
           {dateRange === 'machine' && (
-            <div className="flex gap-3 items-center flex-1">
-              <select value={selectedMachine} onChange={(e) => setSelectedMachine(e.target.value)} className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm">
-                <option value="">Select a machine...</option>
-                {machineList.map(machine => <option key={machine} value={machine}>{machine}</option>)}
-              </select>
+            <div className="flex gap-3 items-center flex-1 relative">
+              <div className="relative flex-1">
+                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search and select a machine..."
+                  value={specificMachineSearch}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSpecificMachineSearch(value);
+                    setShowMachineSuggestions(true);
+                    // If search is cleared, clear selected machine
+                    if (!value.trim()) {
+                      setSelectedMachine('');
+                    }
+                  }}
+                  onFocus={() => setShowMachineSuggestions(true)}
+                  onBlur={() => {
+                    // Delay hiding suggestions to allow click
+                    setTimeout(() => setShowMachineSuggestions(false), 200);
+                  }}
+                  className="w-full px-3 py-2 pl-9 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {specificMachineSearch && (
+                  <button
+                    onClick={() => {
+                      setSpecificMachineSearch('');
+                      setSelectedMachine('');
+                      setShowMachineSuggestions(false);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    ×
+                  </button>
+                )}
+                
+                {/* Suggestions dropdown */}
+                {showMachineSuggestions && machineSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                    {machineSuggestions.map((machineId) => (
+                      <button
+                        key={machineId}
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center gap-2"
+                        onClick={() => {
+                          setSpecificMachineSearch(machineId);
+                          setSelectedMachine(machineId);
+                          setShowMachineSuggestions(false);
+                          console.log("Selected machine:", machineId);
+                        }}
+                      >
+                        <FiCpu size={14} className="text-gray-400" />
+                        <span className="font-mono">{machineId}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {selectedMachine && (
+                <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-lg text-sm text-blue-700 whitespace-nowrap">
+                  <FiCpu size={14} />
+                  <span>{selectedMachine}</span>
+                  <button
+                    onClick={() => {
+                      setSelectedMachine('');
+                      setSpecificMachineSearch('');
+                      setShowMachineSuggestions(false);
+                    }}
+                    className="hover:text-blue-900"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -618,7 +910,7 @@ const Analytics = () => {
             {dateRange === 'lifetime' && 'Showing all historical data'}
             {dateRange === 'custom' && customStartDate && customEndDate && `Showing data from ${customStartDate} to ${customEndDate}`}
             {dateRange === 'machine' && selectedMachine && `Showing lifetime data for ${selectedMachine}`}
-            {dateRange === 'machine' && !selectedMachine && 'Please select a machine to view analytics'}
+            {dateRange === 'machine' && !selectedMachine && 'Please search and select a machine to view analytics'}
           </span>
           {selectedState && <span className="text-blue-600">• State: {selectedState}</span>}
           {selectedCountry && <span className="text-blue-600">• Country: {selectedCountry}</span>}
@@ -708,12 +1000,26 @@ const Analytics = () => {
         <div className="flex justify-between items-center mb-6">
           <h3 className="font-bold text-gray-800 flex items-center gap-2">{getChartIcon()} {getChartTitle()}</h3>
           <div className="flex gap-2">
-            <button onClick={() => setChartView('daily')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${chartView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}><FiSun size={14} /> Daily</button>
-            <button onClick={() => setChartView('monthly')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${chartView === 'monthly' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}><FiCalendar size={14} /> Monthly</button>
-            <button onClick={() => setChartView('lifetime')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${chartView === 'lifetime' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}><FiZap size={14} /> Lifetime</button>
+            <button onClick={() => {
+              console.log("Set chart view: daily");
+              setChartView('daily');
+            }} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${chartView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}><FiSun size={14} /> Daily</button>
+            <button onClick={() => {
+              console.log("Set chart view: monthly");
+              setChartView('monthly');
+            }} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${chartView === 'monthly' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}><FiCalendar size={14} /> Monthly</button>
+            <button onClick={() => {
+              console.log("Set chart view: lifetime");
+              setChartView('lifetime');
+            }} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${chartView === 'lifetime' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}><FiZap size={14} /> Lifetime</button>
           </div>
         </div>
-        <InteractiveChart data={getChartData().map(d => [d.label, d.value])} title={getChartTitle()} color={getChartColors()} unit="taps" />
+        <InteractiveChart 
+          data={getChartData().map(d => [d.label, d.value])} 
+          title={getChartTitle()} 
+          color={getChartColors()} 
+          unit="taps" 
+        />
       </div>
 
       {/* Performance Distribution */}
@@ -766,49 +1072,96 @@ const Analytics = () => {
         </div>
       </div>
 
-      {/* Machine Performance Table */}
+      {/* Machine Performance Table with Search */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="font-bold text-gray-800 flex items-center gap-2"><FiCpu className="text-indigo-600" /> Machine Performance Breakdown</h3>
-          <span className="text-xs text-gray-500">{analytics.machinePerformance.length} machines</span>
+        <div className="p-5 border-b border-gray-100">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <h3 className="font-bold text-gray-800 flex items-center gap-2">
+              <FiCpu className="text-indigo-600" /> Machine Performance Breakdown
+            </h3>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-none">
+                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search Machine ID..."
+                  value={machineSearchTerm}
+                  onChange={(e) => {
+                    console.log("Machine search term:", e.target.value);
+                    setMachineSearchTerm(e.target.value);
+                  }}
+                  className="w-full sm:w-64 px-3 py-2 pl-9 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {machineSearchTerm && (
+                  <button
+                    onClick={() => setMachineSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <span className="text-xs text-gray-500 whitespace-nowrap">
+                {filteredMachinePerformance.length} / {analytics.machinePerformance.length}
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr className="text-left">
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Machine ID</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Location</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Total Taps</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Revenue</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Performance</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {analytics.machinePerformance.map((machine) => (
-                <tr key={machine.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 text-sm font-mono font-bold text-gray-900">{machine.id}</td>
-                  <td className="px-6 py-4 text-xs text-gray-500">{machine.state}, {machine.country}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-gray-700">{machine.taps.toLocaleString()}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-green-600">₹{machine.revenue.toLocaleString()}</td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${machine.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {machine.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 bg-gray-100 rounded-full h-1.5">
-                        <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (machine.taps / analytics.totalTaps) * 100)}%` }} />
-                      </div>
-                      <span className="text-[10px] text-gray-500">{((machine.taps / analytics.totalTaps) * 100).toFixed(1)}%</span>
-                    </div>
-                  </td>
+        
+        {filteredMachinePerformance.length === 0 ? (
+          <div className="p-10 text-center text-gray-500">
+            <FiCpu className="text-4xl mx-auto mb-3 text-gray-300" />
+            <p className="text-sm font-medium">No machines found matching "{machineSearchTerm}"</p>
+            <p className="text-xs text-gray-400">Try adjusting your search term</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr className="text-left">
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Machine ID</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Location</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Total Taps</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Revenue</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Performance</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Sanitization</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filteredMachinePerformance.map((machine) => (
+                  <tr key={machine.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 text-sm font-mono font-bold text-gray-900">{machine.id}</td>
+                    <td className="px-6 py-4 text-xs text-gray-500">{machine.state}, {machine.country}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-gray-700">{machine.taps.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-green-600">₹{machine.revenue.toLocaleString()}</td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${machine.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {machine.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 bg-gray-100 rounded-full h-1.5">
+                          <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (machine.taps / analytics.totalTaps) * 100)}%` }} />
+                        </div>
+                        <span className="text-[10px] text-gray-500">{((machine.taps / analytics.totalTaps) * 100).toFixed(1)}%</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <SanitizationIndicator 
+                        machineId={machine.id}
+                        totalTaps={machine.taps}
+                        containerSize={5}
+                        usagePerTap={0.012}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
