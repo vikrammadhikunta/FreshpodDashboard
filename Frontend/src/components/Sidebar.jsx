@@ -35,9 +35,8 @@ const Sidebar = () => {
     { path: "/admin", name: "Overview", icon: LayoutGrid },
     { path: "/admin/machine", name: "Machines", icon: ShieldCheck },
     { path: "/admin/user", name: "User Directory", icon: Users },
-    { path: "/admin/reports", name: "Reports", icon: FileText }, // ✅ ADDED
+    { path: "/admin/reports", name: "Reports", icon: FileText },
     { path: "/admin/analytics", name: "Analytics", icon: BarChart3 },
-    { path: "/admin/health", name: "System Health", icon: Activity },
     { path: "/admin/settings", name: "Settings", icon: Settings },
   ];
 
