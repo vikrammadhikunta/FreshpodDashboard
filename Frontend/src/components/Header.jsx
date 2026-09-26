@@ -81,23 +81,23 @@ const Header = () => {
   };
 
   return (
-    <header className="fixed top-0 right-0 left-0 lg:left-72 z-[990] h-20 bg-[#F8F9FE]/95 backdrop-blur-md border-b border-gray-100">
+    <header className="fixed top-0 right-0 left-0 lg:left-72 z-[990] h-14 bg-[#F8F9FE]/95 backdrop-blur-md border-b border-gray-100">
       <div className="h-full flex items-center justify-end px-4 md:px-8 max-w-7xl mx-auto lg:mx-0 lg:pr-8">
         
         {/* User Profile - Simple Display */}
-        <div className="flex items-center space-x-3 md:space-x-4">
+        <div className="flex items-center space-x-2 md:space-x-3">
           <div className="text-right">
             {loading ? (
               <>
-                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-1"></div>
-                <div className="h-3 w-32 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-3.5 w-24 bg-gray-200 rounded animate-pulse mb-1"></div>
+                <div className="h-2.5 w-32 bg-gray-200 rounded animate-pulse"></div>
               </>
             ) : (
               <>
-                <p className="text-[14px] font-bold text-[#1A1C1E] leading-tight">
+                <p className="text-[13px] font-bold text-[#1A1C1E] leading-tight">
                   {getDisplayName()}
                 </p>
-                <p className="text-[10px] text-[#8E97A4] font-bold uppercase tracking-wider mt-0.5">
+                <p className="text-[9px] text-[#8E97A4] font-bold uppercase tracking-wider mt-0.5">
                   {getRoleDisplayName()}
                 </p>
               </>
@@ -105,7 +105,7 @@ const Header = () => {
           </div>
           
           {/* User Avatar/Initials */}
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#4D7CFF] to-[#0052FF] flex items-center justify-center text-white font-bold border-2 border-white shadow-sm">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#4D7CFF] to-[#0052FF] flex items-center justify-center text-white font-bold text-sm border-2 border-white shadow-sm">
             {!loading && userData?.name ? userData.name.charAt(0).toUpperCase() : 'U'}
           </div>
         </div>
