@@ -37,6 +37,7 @@ const Sidebar = () => {
     { path: "/admin/user", name: "User Directory", icon: Users },
     { path: "/admin/reports", name: "Reports", icon: FileText },
     { path: "/admin/analytics", name: "Analytics", icon: BarChart3 },
+    { path: "/admin/health", name: "System Health", icon: Activity },
     { path: "/admin/settings", name: "Settings", icon: Settings },
   ];
 
@@ -113,11 +114,12 @@ const Sidebar = () => {
         fixed left-0 top-0 h-full z-[1000] 
         bg-[#F8F9FE] w-72 border-r border-gray-100
         transition-transform duration-300 ease-in-out
+        flex flex-col
         ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         
         {/* Branding Section */}
-        <div className="flex items-center gap-4 px-8 py-10">
+        <div className="flex items-center gap-4 px-8 py-10 shrink-0">
           <div className="w-12 h-12 flex items-center justify-center overflow-hidden rounded-xl shadow-lg shadow-blue-100 bg-white">
             <img src={logoSquare} alt="Freshpod Logo" className="w-full h-full object-contain p-1" />
           </div>
@@ -133,7 +135,7 @@ const Sidebar = () => {
 
         {/* User Info */}
         {user && (
-          <div className="px-6 mb-6">
+          <div className="px-6 mb-6 shrink-0">
             <div className="bg-white rounded-xl p-4 border border-gray-100">
               <p className="text-xs text-gray-500 font-medium">Logged in as</p>
               <p className="text-sm font-bold text-gray-900 mt-1">{user.name}</p>
@@ -145,8 +147,8 @@ const Sidebar = () => {
           </div>
         )}
 
-        {/* Navigation Links */}
-        <nav className="px-6 space-y-2">
+        {/* Navigation Links - Scrollable area */}
+        <nav className="px-6 space-y-2 flex-1 overflow-y-auto pb-4">
           {menuItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -171,8 +173,8 @@ const Sidebar = () => {
           })}
         </nav>
 
-        {/* Logout Section */}
-        <div className="absolute bottom-8 w-full px-6">
+        {/* Logout Section - Now part of flex flow, not absolute */}
+        <div className="w-full px-6 py-6 shrink-0 border-t border-gray-100">
           <button 
             onClick={handleLogout}
             className="flex items-center gap-4 px-6 py-4 w-full rounded-2xl text-[#8E97A4] hover:bg-red-50 hover:text-red-500 transition-all duration-200 group"
