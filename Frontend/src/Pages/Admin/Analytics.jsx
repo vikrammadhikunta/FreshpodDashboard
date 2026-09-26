@@ -6,7 +6,7 @@ import {
   FiCalendar, FiCpu, FiDownload, FiFilter, FiRefreshCw,
   FiActivity, FiDollarSign, FiUsers, FiClock, FiAward,
   FiChevronLeft, FiChevronRight, FiMaximize2, FiMinimize2,
-  FiSun, FiMoon, FiZap, FiMapPin, FiSearch
+  FiSun, FiMoon, FiZap, FiMapPin, FiSearch, FiArrowLeft, FiX
 } from 'react-icons/fi';
 import {SanitizationLevel , SanitizationIndicator} from '../Sanitization.jsx';
 
@@ -28,6 +28,9 @@ const Analytics = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [chartView, setChartView] = useState('daily');
   
+  // NEW: Focused machine (clicked from table)
+  const [focusedMachine, setFocusedMachine] = useState(null);
+  
   // New filter states
   const [selectedState, setSelectedState] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('');
@@ -40,7 +43,7 @@ const Analytics = () => {
   const [specificMachineSearch, setSpecificMachineSearch] = useState('');
   const [showMachineSuggestions, setShowMachineSuggestions] = useState(false);
 
-  console.log("Initial filter states:", { dateRange, selectedState, selectedCountry, selectedMachine });
+  console.log("Initial filter states:", { dateRange, selectedState, selectedCountry, selectedMachine, focusedMachine });
 
   // Get all unique states and countries from machines
   const { uniqueStates, uniqueCountries, machineList } = useMemo(() => {
@@ -94,14 +97,14 @@ const Analytics = () => {
     const searchLower = specificMachineSearch.toLowerCase().trim();
     return machineList
       .filter(id => id.toLowerCase().includes(searchLower))
-      .slice(0, 10); // Limit to 10 suggestions
+      .slice(0, 10);
   }, [specificMachineSearch, machineList]);
 
   // Filter data based on all criteria
   const filteredData = useMemo(() => {
     console.log("=== Filtering Data ===");
     console.log("Input machines:", machines);
-    console.log("Selected filters:", { dateRange, selectedState, selectedCountry, selectedMachine, customStartDate, customEndDate });
+    console.log("Selected filters:", { dateRange, selectedState, selectedCountry, selectedMachine, customStartDate, customEndDate, focusedMachine });
     
     if (!machines) {
       console.log("No machines available, returning null");
@@ -111,43 +114,57 @@ const Analytics = () => {
     let filteredMachines = { ...machines };
     console.log("Initial filteredMachines keys:", Object.keys(filteredMachines).length);
     
-    // Filter by state
-    if (selectedState) {
-      console.log(`Filtering by state: ${selectedState}`);
-      const beforeCount = Object.keys(filteredMachines).length;
-      filteredMachines = Object.fromEntries(
-        Object.entries(filteredMachines).filter(([id, machine]) => {
-          const match = machine.state === selectedState;
-          if (!match) console.log(`Filtering out machine ${id} - state: ${machine.state}`);
-          return match;
-        })
-      );
-      console.log(`State filter: ${beforeCount} -> ${Object.keys(filteredMachines).length} machines`);
-    }
-    
-    // Filter by country
-    if (selectedCountry) {
-      console.log(`Filtering by country: ${selectedCountry}`);
-      const beforeCount = Object.keys(filteredMachines).length;
-      filteredMachines = Object.fromEntries(
-        Object.entries(filteredMachines).filter(([id, machine]) => {
-          const match = machine.country === selectedCountry;
-          if (!match) console.log(`Filtering out machine ${id} - country: ${machine.country}`);
-          return match;
-        })
-      );
-      console.log(`Country filter: ${beforeCount} -> ${Object.keys(filteredMachines).length} machines`);
-    }
-    
-    // Filter by specific machine if selected
-    if (dateRange === 'machine' && selectedMachine) {
-      console.log(`Filtering by specific machine: ${selectedMachine}`);
-      if (machines[selectedMachine]) {
-        filteredMachines = { [selectedMachine]: machines[selectedMachine] };
-        console.log(`Found machine ${selectedMachine}`);
+    // NEW: If a focused machine is set (from clicking table row), only show that machine
+    if (focusedMachine) {
+      console.log(`Focusing on single machine: ${focusedMachine}`);
+      if (machines[focusedMachine]) {
+        filteredMachines = { [focusedMachine]: machines[focusedMachine] };
+        console.log(`Focused machine found: ${focusedMachine}`);
       } else {
-        console.warn(`Machine ${selectedMachine} not found`);
+        console.warn(`Focused machine ${focusedMachine} not found`);
         filteredMachines = {};
+      }
+      // Skip other filters when focused on a single machine
+      console.log("Focused mode - skipping other filters");
+    } else {
+      // Filter by state
+      if (selectedState) {
+        console.log(`Filtering by state: ${selectedState}`);
+        const beforeCount = Object.keys(filteredMachines).length;
+        filteredMachines = Object.fromEntries(
+          Object.entries(filteredMachines).filter(([id, machine]) => {
+            const match = machine.state === selectedState;
+            if (!match) console.log(`Filtering out machine ${id} - state: ${machine.state}`);
+            return match;
+          })
+        );
+        console.log(`State filter: ${beforeCount} -> ${Object.keys(filteredMachines).length} machines`);
+      }
+      
+      // Filter by country
+      if (selectedCountry) {
+        console.log(`Filtering by country: ${selectedCountry}`);
+        const beforeCount = Object.keys(filteredMachines).length;
+        filteredMachines = Object.fromEntries(
+          Object.entries(filteredMachines).filter(([id, machine]) => {
+            const match = machine.country === selectedCountry;
+            if (!match) console.log(`Filtering out machine ${id} - country: ${machine.country}`);
+            return match;
+          })
+        );
+        console.log(`Country filter: ${beforeCount} -> ${Object.keys(filteredMachines).length} machines`);
+      }
+      
+      // Filter by specific machine if selected
+      if (dateRange === 'machine' && selectedMachine) {
+        console.log(`Filtering by specific machine: ${selectedMachine}`);
+        if (machines[selectedMachine]) {
+          filteredMachines = { [selectedMachine]: machines[selectedMachine] };
+          console.log(`Found machine ${selectedMachine}`);
+        } else {
+          console.warn(`Machine ${selectedMachine} not found`);
+          filteredMachines = {};
+        }
       }
     }
 
@@ -189,9 +206,9 @@ const Analytics = () => {
 
     console.log("Final filteredMachines keys:", Object.keys(filteredMachines));
     return filteredMachines;
-  }, [machines, dateRange, customStartDate, customEndDate, selectedMachine, selectedState, selectedCountry]);
+  }, [machines, dateRange, customStartDate, customEndDate, selectedMachine, selectedState, selectedCountry, focusedMachine]);
 
-  // Calculate analytics with actual cost per tap from machines
+  // Calculate analytics
   const analytics = useMemo(() => {
     console.log("=== Calculating Analytics ===");
     console.log("FilteredData:", filteredData);
@@ -230,7 +247,6 @@ const Analytics = () => {
       const costPerTap = machine.costPerTap || 0.50;
       console.log(`Machine ${id} costPerTap:`, costPerTap);
       
-      // Track state and country stats
       const state = machine.state || 'Unknown';
       const country = machine.country || 'India';
       console.log(`Machine ${id} location: ${state}, ${country}`);
@@ -248,10 +264,8 @@ const Analytics = () => {
         machineTaps += count;
         totalTaps += count;
         
-        // Daily aggregation
         dailyData[date] = (dailyData[date] || 0) + count;
         
-        // Monthly aggregation
         const dateObj = new Date(date);
         if (isNaN(dateObj.getTime())) {
           console.error(`Invalid date: ${date}`);
@@ -260,7 +274,6 @@ const Analytics = () => {
         const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
         monthlyData[monthKey] = (monthlyData[monthKey] || 0) + count;
         
-        // Yearly aggregation
         const year = dateObj.getFullYear();
         yearlyData[year] = (yearlyData[year] || 0) + count;
       });
@@ -269,7 +282,6 @@ const Analytics = () => {
       totalRevenue += machineRevenue;
       if (machineTaps > 0) activeMachines++;
       
-      // Update state and country stats
       stateStats[state].taps += machineTaps;
       stateStats[state].revenue += machineRevenue;
       stateStats[state].machines += 1;
@@ -299,7 +311,6 @@ const Analytics = () => {
       yearlyDataKeys: Object.keys(yearlyData).length
     });
 
-    // Calculate trends
     const dailyTrend = Object.entries(dailyData)
       .sort((a, b) => new Date(a[0]) - new Date(b[0]))
       .slice(-90);
@@ -322,7 +333,6 @@ const Analytics = () => {
     
     console.log("Yearly trend length:", yearlyTrend.length);
 
-    // Calculate growth metrics
     const previousPeriod = monthlyTrend.slice(-6, -3);
     const currentPeriod = monthlyTrend.slice(-3);
     const previousAvg = previousPeriod.reduce((acc, [_, val]) => acc + val, 0) / (previousPeriod.length || 1);
@@ -331,7 +341,6 @@ const Analytics = () => {
     
     console.log("Growth metrics:", { previousAvg, currentAvg, growthRate });
 
-    // Peak performance times
     const peakDay = dailyTrend.length > 0 ? dailyTrend.reduce((a, b) => a[1] > b[1] ? a : b)[0] : 'N/A';
     const peakMonth = monthlyTrend.length > 0 ? monthlyTrend.reduce((a, b) => a[1] > b[1] ? a : b)[0] : 'N/A';
     const peakYear = yearlyTrend.length > 0 ? yearlyTrend.reduce((a, b) => a[1] > b[1] ? a : b)[0] : 'N/A';
@@ -388,10 +397,10 @@ const Analytics = () => {
     }
     
     const exportData = {
-      period: dateRange,
+      period: focusedMachine ? `focused-${focusedMachine}` : dateRange,
       startDate: customStartDate,
       endDate: customEndDate,
-      machine: selectedMachine,
+      machine: focusedMachine || selectedMachine,
       filters: {
         state: selectedState,
         country: selectedCountry
@@ -417,7 +426,7 @@ const Analytics = () => {
     
     const dataStr = JSON.stringify(exportData, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = `analytics_${dateRange}_${selectedState || 'all'}_${selectedCountry || 'all'}_${new Date().toISOString()}.json`;
+    const exportFileDefaultName = `analytics_${focusedMachine || dateRange}_${selectedState || 'all'}_${selectedCountry || 'all'}_${new Date().toISOString()}.json`;
     
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
@@ -437,6 +446,22 @@ const Analytics = () => {
     setMachineSearchTerm('');
     setSpecificMachineSearch('');
     setShowMachineSuggestions(false);
+    setFocusedMachine(null); // NEW: Clear focused machine
+  };
+
+  // NEW: Handle machine row click
+  const handleMachineClick = (machineId) => {
+    console.log("Machine row clicked:", machineId);
+    setFocusedMachine(machineId);
+    setMachineSearchTerm('');
+    // Scroll to top to see the focused view
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // NEW: Clear focused machine
+  const clearFocusedMachine = () => {
+    console.log("Clearing focused machine");
+    setFocusedMachine(null);
   };
 
   // Interactive chart component
@@ -633,6 +658,9 @@ const Analytics = () => {
   };
 
   const getChartTitle = () => {
+    if (focusedMachine) {
+      return `${focusedMachine} - Tap Trends`;
+    }
     switch(chartView) {
       case 'daily': return 'Daily Tap Trends (Last 30 Days)';
       case 'monthly': return 'Monthly Tap Trends';
@@ -650,7 +678,6 @@ const Analytics = () => {
     }
   };
 
-  // Early returns with logging
   if (loading) {
     console.log("Loading state active, showing loading component");
     return <Loading />;
@@ -667,6 +694,14 @@ const Analytics = () => {
           <p className="text-lg font-medium">No tap data available</p>
           <p className="text-sm">Start collecting tap data to see analytics insights.</p>
           <p className="text-xs text-gray-400 mt-2">Debug: {!analytics ? 'analytics is null' : 'totalTaps = 0'}</p>
+          {focusedMachine && (
+            <button 
+              onClick={clearFocusedMachine}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+            >
+              <FiArrowLeft className="inline mr-1" /> Back to All Machines
+            </button>
+          )}
         </div>
       </div>
     );
@@ -675,13 +710,51 @@ const Analytics = () => {
   console.log("Rendering main component with analytics data");
   return (
     <div className="w-full p-4 md:p-6 bg-gray-50 min-h-screen">
+      {/* NEW: Focused Machine Banner */}
+      {focusedMachine && (
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-4 md:p-5 mb-6 text-white shadow-lg">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2.5 rounded-xl">
+                <FiCpu className="text-2xl" />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase opacity-80">Viewing Single Machine</p>
+                <p className="text-xl font-bold font-mono">{focusedMachine}</p>
+                <p className="text-xs opacity-80 mt-0.5">
+                  {analytics.machinePerformance[0]?.state}, {analytics.machinePerformance[0]?.country} • {analytics.totalTaps.toLocaleString()} total taps
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={clearFocusedMachine}
+              className="bg-white text-blue-700 px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-50 flex items-center gap-2 transition-colors shadow-sm"
+            >
+              <FiArrowLeft /> Back to All Machines
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Advanced Analytics</h1>
-          <p className="text-sm text-gray-500 font-medium">Predictive modeling and fleet distribution</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {focusedMachine ? `Machine Analytics` : 'Advanced Analytics'}
+          </h1>
+          <p className="text-sm text-gray-500 font-medium">
+            {focusedMachine ? `Detailed insights for ${focusedMachine}` : 'Predictive modeling and fleet distribution'}
+          </p>
         </div>
         <div className="flex gap-3">
+          {focusedMachine && (
+            <button 
+              onClick={clearFocusedMachine}
+              className="bg-white border border-blue-500 text-blue-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-50 flex items-center gap-2"
+            >
+              <FiX /> Clear Selection
+            </button>
+          )}
           <button 
             onClick={() => {
               console.log("Toggle filters");
@@ -689,7 +762,8 @@ const Analytics = () => {
             }}
             className={`bg-white border px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
               (selectedState || selectedCountry) ? 'border-blue-500 text-blue-600' : 'border-gray-200 text-gray-700'
-            }`}
+            } ${focusedMachine ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={!!focusedMachine}
           >
             <FiFilter /> Filters {(selectedState || selectedCountry) && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
           </button>
@@ -705,8 +779,8 @@ const Analytics = () => {
         </div>
       </div>
 
-      {/* Filter Panel */}
-      {showFilters && (
+      {/* Filter Panel - Hidden when focused on a machine */}
+      {!focusedMachine && showFilters && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-gray-800 flex items-center gap-2">
@@ -769,153 +843,152 @@ const Analytics = () => {
         </div>
       )}
 
-      {/* Date Range & Filter Controls */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => { 
-              console.log("Set date range: lifetime");
-              setDateRange('lifetime'); 
-              setSelectedMachine(''); 
-              setSpecificMachineSearch('');
-              setShowMachineSuggestions(false);
-            }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'lifetime' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-              Lifetime
-            </button>
-            <button onClick={() => { 
-              console.log("Set date range: custom");
-              setDateRange('custom'); 
-              setSelectedMachine(''); 
-              setShowDatePicker(true); 
-              setSpecificMachineSearch('');
-              setShowMachineSuggestions(false);
-            }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'custom' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-              Custom Range
-            </button>
-            <button onClick={() => { 
-              console.log("Set date range: machine");
-              setDateRange('machine'); 
-              setShowDatePicker(false); 
-            }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'machine' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-              Specific Machine
-            </button>
-          </div>
-
-          {dateRange === 'custom' && showDatePicker && (
-            <div className="flex gap-3 items-center flex-wrap">
-              <input 
-                type="date" 
-                value={customStartDate} 
-                onChange={(e) => {
-                  console.log("Custom start date:", e.target.value);
-                  setCustomStartDate(e.target.value);
-                }} 
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm" 
-              />
-              <span className="text-gray-500">to</span>
-              <input 
-                type="date" 
-                value={customEndDate} 
-                onChange={(e) => {
-                  console.log("Custom end date:", e.target.value);
-                  setCustomEndDate(e.target.value);
-                }} 
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm" 
-              />
-              <button onClick={() => setShowDatePicker(false)} className="px-3 py-2 text-gray-500 hover:text-gray-700">Apply</button>
+      {/* Date Range & Filter Controls - Simplified when focused */}
+      {!focusedMachine && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => { 
+                console.log("Set date range: lifetime");
+                setDateRange('lifetime'); 
+                setSelectedMachine(''); 
+                setSpecificMachineSearch('');
+                setShowMachineSuggestions(false);
+              }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'lifetime' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                Lifetime
+              </button>
+              <button onClick={() => { 
+                console.log("Set date range: custom");
+                setDateRange('custom'); 
+                setSelectedMachine(''); 
+                setShowDatePicker(true); 
+                setSpecificMachineSearch('');
+                setShowMachineSuggestions(false);
+              }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'custom' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                Custom Range
+              </button>
+              <button onClick={() => { 
+                console.log("Set date range: machine");
+                setDateRange('machine'); 
+                setShowDatePicker(false); 
+              }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateRange === 'machine' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                Specific Machine
+              </button>
             </div>
-          )}
 
-          {dateRange === 'machine' && (
-            <div className="flex gap-3 items-center flex-1 relative">
-              <div className="relative flex-1">
-                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input
-                  type="text"
-                  placeholder="Search and select a machine..."
-                  value={specificMachineSearch}
+            {dateRange === 'custom' && showDatePicker && (
+              <div className="flex gap-3 items-center flex-wrap">
+                <input 
+                  type="date" 
+                  value={customStartDate} 
                   onChange={(e) => {
-                    const value = e.target.value;
-                    setSpecificMachineSearch(value);
-                    setShowMachineSuggestions(true);
-                    // If search is cleared, clear selected machine
-                    if (!value.trim()) {
-                      setSelectedMachine('');
-                    }
-                  }}
-                  onFocus={() => setShowMachineSuggestions(true)}
-                  onBlur={() => {
-                    // Delay hiding suggestions to allow click
-                    setTimeout(() => setShowMachineSuggestions(false), 200);
-                  }}
-                  className="w-full px-3 py-2 pl-9 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    console.log("Custom start date:", e.target.value);
+                    setCustomStartDate(e.target.value);
+                  }} 
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm" 
                 />
-                {specificMachineSearch && (
-                  <button
-                    onClick={() => {
-                      setSpecificMachineSearch('');
-                      setSelectedMachine('');
-                      setShowMachineSuggestions(false);
+                <span className="text-gray-500">to</span>
+                <input 
+                  type="date" 
+                  value={customEndDate} 
+                  onChange={(e) => {
+                    console.log("Custom end date:", e.target.value);
+                    setCustomEndDate(e.target.value);
+                  }} 
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm" 
+                />
+                <button onClick={() => setShowDatePicker(false)} className="px-3 py-2 text-gray-500 hover:text-gray-700">Apply</button>
+              </div>
+            )}
+
+            {dateRange === 'machine' && (
+              <div className="flex gap-3 items-center flex-1 relative">
+                <div className="relative flex-1">
+                  <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search and select a machine..."
+                    value={specificMachineSearch}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSpecificMachineSearch(value);
+                      setShowMachineSuggestions(true);
+                      if (!value.trim()) {
+                        setSelectedMachine('');
+                      }
                     }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    ×
-                  </button>
-                )}
-                
-                {/* Suggestions dropdown */}
-                {showMachineSuggestions && machineSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
-                    {machineSuggestions.map((machineId) => (
-                      <button
-                        key={machineId}
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center gap-2"
-                        onClick={() => {
-                          setSpecificMachineSearch(machineId);
-                          setSelectedMachine(machineId);
-                          setShowMachineSuggestions(false);
-                          console.log("Selected machine:", machineId);
-                        }}
-                      >
-                        <FiCpu size={14} className="text-gray-400" />
-                        <span className="font-mono">{machineId}</span>
-                      </button>
-                    ))}
+                    onFocus={() => setShowMachineSuggestions(true)}
+                    onBlur={() => {
+                      setTimeout(() => setShowMachineSuggestions(false), 200);
+                    }}
+                    className="w-full px-3 py-2 pl-9 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  {specificMachineSearch && (
+                    <button
+                      onClick={() => {
+                        setSpecificMachineSearch('');
+                        setSelectedMachine('');
+                        setShowMachineSuggestions(false);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      ×
+                    </button>
+                  )}
+                  
+                  {showMachineSuggestions && machineSuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                      {machineSuggestions.map((machineId) => (
+                        <button
+                          key={machineId}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center gap-2"
+                          onClick={() => {
+                            setSpecificMachineSearch(machineId);
+                            setSelectedMachine(machineId);
+                            setShowMachineSuggestions(false);
+                            console.log("Selected machine:", machineId);
+                          }}
+                        >
+                          <FiCpu size={14} className="text-gray-400" />
+                          <span className="font-mono">{machineId}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {selectedMachine && (
+                  <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-lg text-sm text-blue-700 whitespace-nowrap">
+                    <FiCpu size={14} />
+                    <span>{selectedMachine}</span>
+                    <button
+                      onClick={() => {
+                        setSelectedMachine('');
+                        setSpecificMachineSearch('');
+                        setShowMachineSuggestions(false);
+                      }}
+                      className="hover:text-blue-900"
+                    >
+                      ×
+                    </button>
                   </div>
                 )}
               </div>
-              {selectedMachine && (
-                <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-lg text-sm text-blue-700 whitespace-nowrap">
-                  <FiCpu size={14} />
-                  <span>{selectedMachine}</span>
-                  <button
-                    onClick={() => {
-                      setSelectedMachine('');
-                      setSpecificMachineSearch('');
-                      setShowMachineSuggestions(false);
-                    }}
-                    className="hover:text-blue-900"
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        <div className="mt-3 flex items-center gap-2 text-xs text-gray-500 flex-wrap">
-          <FiCalendar size={12} />
-          <span>
-            {dateRange === 'lifetime' && 'Showing all historical data'}
-            {dateRange === 'custom' && customStartDate && customEndDate && `Showing data from ${customStartDate} to ${customEndDate}`}
-            {dateRange === 'machine' && selectedMachine && `Showing lifetime data for ${selectedMachine}`}
-            {dateRange === 'machine' && !selectedMachine && 'Please search and select a machine to view analytics'}
-          </span>
-          {selectedState && <span className="text-blue-600">• State: {selectedState}</span>}
-          {selectedCountry && <span className="text-blue-600">• Country: {selectedCountry}</span>}
+          <div className="mt-3 flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+            <FiCalendar size={12} />
+            <span>
+              {dateRange === 'lifetime' && 'Showing all historical data'}
+              {dateRange === 'custom' && customStartDate && customEndDate && `Showing data from ${customStartDate} to ${customEndDate}`}
+              {dateRange === 'machine' && selectedMachine && `Showing lifetime data for ${selectedMachine}`}
+              {dateRange === 'machine' && !selectedMachine && 'Please search and select a machine to view analytics'}
+            </span>
+            {selectedState && <span className="text-blue-600">• State: {selectedState}</span>}
+            {selectedCountry && <span className="text-blue-600">• Country: {selectedCountry}</span>}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Key Metrics Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
@@ -947,53 +1020,53 @@ const Analytics = () => {
         </div>
       </div>
 
-      {/* State and Country Stats Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Top States */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <FiMapPin className="text-green-600" /> Top Performing States
-          </h3>
-          <div className="space-y-3">
-            {Object.entries(analytics.stateStats)
-              .sort((a, b) => b[1].taps - a[1].taps)
-              .slice(0, 5)
-              .map(([state, data]) => (
-                <div key={state}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-medium">{state}</span>
-                    <span className="text-gray-500">{data.taps.toLocaleString()} taps</span>
+      {/* State and Country Stats Cards - Hidden when focused on single machine */}
+      {!focusedMachine && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <FiMapPin className="text-green-600" /> Top Performing States
+            </h3>
+            <div className="space-y-3">
+              {Object.entries(analytics.stateStats)
+                .sort((a, b) => b[1].taps - a[1].taps)
+                .slice(0, 5)
+                .map(([state, data]) => (
+                  <div key={state}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-medium">{state}</span>
+                      <span className="text-gray-500">{data.taps.toLocaleString()} taps</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div className="bg-green-500 h-2 rounded-full" style={{ width: `${(data.taps / analytics.totalTaps) * 100}%` }} />
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className="bg-green-500 h-2 rounded-full" style={{ width: `${(data.taps / analytics.totalTaps) * 100}%` }} />
-                  </div>
-                </div>
-              ))}
+                ))}
+            </div>
           </div>
-        </div>
 
-        {/* Top Countries */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <FiMapPin className="text-blue-600" /> Performance by Country
-          </h3>
-          <div className="space-y-3">
-            {Object.entries(analytics.countryStats)
-              .sort((a, b) => b[1].taps - a[1].taps)
-              .map(([country, data]) => (
-                <div key={country}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-medium">{country}</span>
-                    <span className="text-gray-500">{data.taps.toLocaleString()} taps</span>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <FiMapPin className="text-blue-600" /> Performance by Country
+            </h3>
+            <div className="space-y-3">
+              {Object.entries(analytics.countryStats)
+                .sort((a, b) => b[1].taps - a[1].taps)
+                .map(([country, data]) => (
+                  <div key={country}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-medium">{country}</span>
+                      <span className="text-gray-500">{data.taps.toLocaleString()} taps</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${(data.taps / analytics.totalTaps) * 100}%` }} />
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${(data.taps / analytics.totalTaps) * 100}%` }} />
-                  </div>
-                </div>
-              ))}
+                ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Curve Chart */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
@@ -1022,149 +1095,165 @@ const Analytics = () => {
         />
       </div>
 
-      {/* Performance Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><FiPieChart className="text-purple-600" /> Performance Distribution</h3>
-          <div className="space-y-6">
-            {(() => {
-              const high = analytics.machinePerformance.filter(m => m.taps > 1000).length;
-              const medium = analytics.machinePerformance.filter(m => m.taps >= 100 && m.taps <= 1000).length;
-              const low = analytics.machinePerformance.filter(m => m.taps < 100 && m.taps > 0).length;
-              const inactive = analytics.machinePerformance.filter(m => m.taps === 0).length;
-              const total = analytics.machinePerformance.length;
-              return [
-                { range: "High Volume (>1000 taps)", count: high, percent: ((high/total)*100).toFixed(1), color: "bg-green-500" },
-                { range: "Medium Volume (100-1000 taps)", count: medium, percent: ((medium/total)*100).toFixed(1), color: "bg-blue-500" },
-                { range: "Low Volume (<100 taps)", count: low, percent: ((low/total)*100).toFixed(1), color: "bg-yellow-500" },
-                { range: "Inactive (0 taps)", count: inactive, percent: ((inactive/total)*100).toFixed(1), color: "bg-gray-400" }
-              ].map((item, i) => (
-                <div key={i}>
-                  <div className="flex justify-between text-xs font-bold mb-2 text-gray-600">
-                    <span>{item.range}</span>
-                    <span>{item.count} machines ({item.percent}%)</span>
+      {/* Performance Distribution - Hidden when focused on single machine */}
+      {!focusedMachine && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><FiPieChart className="text-purple-600" /> Performance Distribution</h3>
+            <div className="space-y-6">
+              {(() => {
+                const high = analytics.machinePerformance.filter(m => m.taps > 1000).length;
+                const medium = analytics.machinePerformance.filter(m => m.taps >= 100 && m.taps <= 1000).length;
+                const low = analytics.machinePerformance.filter(m => m.taps < 100 && m.taps > 0).length;
+                const inactive = analytics.machinePerformance.filter(m => m.taps === 0).length;
+                const total = analytics.machinePerformance.length;
+                return [
+                  { range: "High Volume (>1000 taps)", count: high, percent: ((high/total)*100).toFixed(1), color: "bg-green-500" },
+                  { range: "Medium Volume (100-1000 taps)", count: medium, percent: ((medium/total)*100).toFixed(1), color: "bg-blue-500" },
+                  { range: "Low Volume (<100 taps)", count: low, percent: ((low/total)*100).toFixed(1), color: "bg-yellow-500" },
+                  { range: "Inactive (0 taps)", count: inactive, percent: ((inactive/total)*100).toFixed(1), color: "bg-gray-400" }
+                ].map((item, i) => (
+                  <div key={i}>
+                    <div className="flex justify-between text-xs font-bold mb-2 text-gray-600">
+                      <span>{item.range}</span>
+                      <span>{item.count} machines ({item.percent}%)</span>
+                    </div>
+                    <div className="w-full bg-gray-100 h-2 rounded-full">
+                      <div className={`${item.color} h-full rounded-full`} style={{ width: `${item.percent}%` }} />
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-100 h-2 rounded-full">
-                    <div className={`${item.color} h-full rounded-full`} style={{ width: `${item.percent}%` }} />
-                  </div>
-                </div>
-              ));
-            })()}
+                ));
+              })()}
+            </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 gap-4">
-          <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-5 rounded-2xl text-white">
-            <FiAward className="text-2xl mb-2 opacity-80" />
-            <h3 className="text-xs font-bold opacity-80">Peak Performance Day</h3>
-            <p className="text-xl font-bold mt-1">{analytics.peakDay !== 'N/A' ? new Date(analytics.peakDay).toLocaleDateString() : 'N/A'}</p>
-          </div>
-          <div className="bg-gradient-to-br from-purple-600 to-purple-700 p-5 rounded-2xl text-white">
-            <FiTrendingUp className="text-2xl mb-2 opacity-80" />
-            <h3 className="text-xs font-bold opacity-80">Best Performing Month</h3>
-            <p className="text-xl font-bold mt-1">{analytics.peakMonth}</p>
-          </div>
-          <div className="bg-gradient-to-br from-orange-600 to-orange-700 p-5 rounded-2xl text-white">
-            <FiActivity className="text-2xl mb-2 opacity-80" />
-            <h3 className="text-xs font-bold opacity-80">Peak Year</h3>
-            <p className="text-xl font-bold mt-1">{analytics.peakYear}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Machine Performance Table with Search */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-gray-100">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <h3 className="font-bold text-gray-800 flex items-center gap-2">
-              <FiCpu className="text-indigo-600" /> Machine Performance Breakdown
-            </h3>
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <div className="relative flex-1 sm:flex-none">
-                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input
-                  type="text"
-                  placeholder="Search Machine ID..."
-                  value={machineSearchTerm}
-                  onChange={(e) => {
-                    console.log("Machine search term:", e.target.value);
-                    setMachineSearchTerm(e.target.value);
-                  }}
-                  className="w-full sm:w-64 px-3 py-2 pl-9 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                {machineSearchTerm && (
-                  <button
-                    onClick={() => setMachineSearchTerm('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              <span className="text-xs text-gray-500 whitespace-nowrap">
-                {filteredMachinePerformance.length} / {analytics.machinePerformance.length}
-              </span>
+          <div className="grid grid-cols-1 gap-4">
+            <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-5 rounded-2xl text-white">
+              <FiAward className="text-2xl mb-2 opacity-80" />
+              <h3 className="text-xs font-bold opacity-80">Peak Performance Day</h3>
+              <p className="text-xl font-bold mt-1">{analytics.peakDay !== 'N/A' ? new Date(analytics.peakDay).toLocaleDateString() : 'N/A'}</p>
+            </div>
+            <div className="bg-gradient-to-br from-purple-600 to-purple-700 p-5 rounded-2xl text-white">
+              <FiTrendingUp className="text-2xl mb-2 opacity-80" />
+              <h3 className="text-xs font-bold opacity-80">Best Performing Month</h3>
+              <p className="text-xl font-bold mt-1">{analytics.peakMonth}</p>
+            </div>
+            <div className="bg-gradient-to-br from-orange-600 to-orange-700 p-5 rounded-2xl text-white">
+              <FiActivity className="text-2xl mb-2 opacity-80" />
+              <h3 className="text-xs font-bold opacity-80">Peak Year</h3>
+              <p className="text-xl font-bold mt-1">{analytics.peakYear}</p>
             </div>
           </div>
         </div>
-        
-        {filteredMachinePerformance.length === 0 ? (
-          <div className="p-10 text-center text-gray-500">
-            <FiCpu className="text-4xl mx-auto mb-3 text-gray-300" />
-            <p className="text-sm font-medium">No machines found matching "{machineSearchTerm}"</p>
-            <p className="text-xs text-gray-400">Try adjusting your search term</p>
+      )}
+
+      {/* Machine Performance Table with Search - Hidden when focused on single machine */}
+      {!focusedMachine && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-gray-100">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                <FiCpu className="text-indigo-600" /> Machine Performance Breakdown
+              </h3>
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="relative flex-1 sm:flex-none">
+                  <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search Machine ID..."
+                    value={machineSearchTerm}
+                    onChange={(e) => {
+                      console.log("Machine search term:", e.target.value);
+                      setMachineSearchTerm(e.target.value);
+                    }}
+                    className="w-full sm:w-64 px-3 py-2 pl-9 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  {machineSearchTerm && (
+                    <button
+                      onClick={() => setMachineSearchTerm('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <span className="text-xs text-gray-500 whitespace-nowrap">
+                  {filteredMachinePerformance.length} / {analytics.machinePerformance.length}
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+              <FiArrowUpRight size={12} /> Click on any machine row to view detailed analytics for that machine
+            </p>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr className="text-left">
-                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Machine ID</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Location</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Total Taps</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Revenue</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Performance</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Sanitization</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filteredMachinePerformance.map((machine) => (
-                  <tr key={machine.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-mono font-bold text-gray-900">{machine.id}</td>
-                    <td className="px-6 py-4 text-xs text-gray-500">{machine.state}, {machine.country}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-gray-700">{machine.taps.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-green-600">₹{machine.revenue.toLocaleString()}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${machine.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {machine.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-24 bg-gray-100 rounded-full h-1.5">
-                          <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (machine.taps / analytics.totalTaps) * 100)}%` }} />
-                        </div>
-                        <span className="text-[10px] text-gray-500">{((machine.taps / analytics.totalTaps) * 100).toFixed(1)}%</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <SanitizationIndicator 
-                        machineId={machine.id}
-                        totalTaps={machine.taps}
-                        containerSize={5}
-                        usagePerTap={0.012}
-                      />
-                    </td>
+          
+          {filteredMachinePerformance.length === 0 ? (
+            <div className="p-10 text-center text-gray-500">
+              <FiCpu className="text-4xl mx-auto mb-3 text-gray-300" />
+              <p className="text-sm font-medium">No machines found matching "{machineSearchTerm}"</p>
+              <p className="text-xs text-gray-400">Try adjusting your search term</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr className="text-left">
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Machine ID</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Location</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Total Taps</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Revenue</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Performance</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Sanitization</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredMachinePerformance.map((machine) => (
+                    <tr 
+                      key={machine.id} 
+                      onClick={() => handleMachineClick(machine.id)}
+                      className="hover:bg-blue-50 transition-colors cursor-pointer group"
+                    >
+                      <td className="px-6 py-4 text-sm font-mono font-bold text-gray-900 group-hover:text-blue-600">
+                        <div className="flex items-center gap-2">
+                          <FiChevronRight className="text-gray-300 group-hover:text-blue-500 transition-colors" size={14} />
+                          {machine.id}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-gray-500">{machine.state}, {machine.country}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-gray-700">{machine.taps.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-green-600">₹{machine.revenue.toLocaleString()}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${machine.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {machine.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 bg-gray-100 rounded-full h-1.5">
+                            <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (machine.taps / analytics.totalTaps) * 100)}%` }} />
+                          </div>
+                          <span className="text-[10px] text-gray-500">{((machine.taps / analytics.totalTaps) * 100).toFixed(1)}%</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <SanitizationIndicator 
+                          machineId={machine.id}
+                          totalTaps={machine.taps}
+                          containerSize={5}
+                          usagePerTap={0.012}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
 
-export default Analytics;
+export default Analytics;``
